@@ -42,6 +42,15 @@ packages:
       url: "git@github.com:audaudio/aud_audio_core.git"
     source: git
     version: "0.5.2"
+  aud_audio_graph:
+    dependency: "direct dev"
+    description:
+      path: "."
+      resolved-ref: "66d46737d62b8cbaba5f800c6565cba61ca256e0"
+      tag-pattern: "{{version}}"
+      url: "git@github.com:audaudio/aud_audio_graph.git"
+    source: git
+    version: "0.5.3"
   aud_midi_standard:
     dependency: transitive
     description:
@@ -203,7 +212,7 @@ packages:
     source: hosted
     version: "0.2.4"
   ffi:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: ffi
       sha256: "6d7fd89431262d8f3125e81b50d3847a091d846eafcd4fdb88dd06f36d705a45"
@@ -214,10 +223,10 @@ packages:
     dependency: "direct dev"
     description:
       name: ffigen
-      sha256: b7803707faeec4ce3c1b0c2274906504b796e3b70ad573577e72333bd1c9b3ba
+      sha256: "6f55d99ac1857fc063b58c3b31753df2bba417028ba98d30c6d625a385855064"
       url: "https://pub.dev"
     source: hosted
-    version: "20.1.1"
+    version: "23.0.0"
   file:
     dependency: transitive
     description:
@@ -371,7 +380,7 @@ packages:
     source: hosted
     version: "0.12.20"
   meta:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: meta
       sha256: "307249ce4ff29d58a18e97f6345f539382eb9c9c29ecda628900f31de0443dd9"
@@ -475,7 +484,7 @@ packages:
     source: hosted
     version: "4.1.0"
   record_use:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: record_use
       sha256: "1cb8564af8d43b464294411db9217f5ec04891c6f22ee2c32d73ae05e88a6bd2"
