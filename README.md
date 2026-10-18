@@ -1,49 +1,5 @@
 # aud_audio_script
 
-A new Dart FFI package project.
+Script modulation of the Audanika Audio Engine: the node aud.script.modulator runs JavaScript on QuickJS-ng in a worker of its own and sends controls once per audio buffer; optional, apps add it explicitly.
 
-## Getting Started
-
-This project is a starting point for a Flutter
-[FFI package](https://flutter.dev/to/ffi-package),
-a specialized package that includes native code directly invoked with Dart FFI.
-
-## Project structure
-
-This template uses the following structure:
-
-* `src`: Contains the native source code, and a CmakeFile.txt file for building
-  that source code into a dynamic library.
-
-* `lib`: Contains the Dart code that defines the API of the plugin, and which
-  calls into the native code using `dart:ffi`.
-
-* `bin`: Contains the `build.dart` that performs the external native builds.
-
-## Building and bundling native code
-
-`build.dart` does the building of native components.
-
-Bundling is done by Flutter based on the output from `build.dart`.
-
-## Binding to native code
-
-To use the native code, bindings in Dart are needed.
-To avoid writing these by hand, they are generated from the header file
-(`src/aud_audio_script.h`) by `package:ffigen`.
-Regenerate the bindings by running `dart run ffigen --config ffigen.yaml`.
-
-## Invoking native code
-
-Very short-running native functions can be directly invoked from any isolate.
-For example, see `sum` in `lib/aud_audio_script.dart`.
-
-Longer-running functions should be invoked on a helper isolate to avoid
-dropping frames in Flutter applications.
-For example, see `sumAsync` in `lib/aud_audio_script.dart`.
-
-## Flutter help
-
-For help getting started with Flutter, view our
-[online documentation](https://docs.flutter.dev), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Part of the Audanika Audio Engine; planned in [aud_audio_pm](https://github.com/audaudio/aud_audio_pm).

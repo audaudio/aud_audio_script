@@ -1,0 +1,19 @@
+// @license
+// Copyright (c) Audanika. All Rights Reserved.
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
+
+{
+  "name": "aud_audio_script",
+  "summary": "Script modulation of the Audanika Audio Engine: the node aud.script.modulator runs JavaScript on QuickJS-ng in a worker of its own and sends controls once per audio buffer; optional, apps add it explicitly.",
+  "domain": [
+    "Script modulation of the Audanika Audio Engine"
+  ],
+  "interfaces": {
+    "uses": {
+      "aud_audio_core": "package dependency"
+    },
+    "usedBy": {}
+  }
+}
