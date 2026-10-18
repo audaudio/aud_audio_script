@@ -1,0 +1,16 @@
+# Run with `dart run ffigen --config ffigen.yaml`.
+name: AudAudioScriptBindings
+description: |
+  Bindings for `src/aud_audio_script.h`.
+
+  Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
+output: 'lib/aud_audio_script_bindings_generated.dart'
+headers:
+  entry-points:
+    - 'src/aud_audio_script.h'
+  include-directives:
+    - 'src/aud_audio_script.h'
+ffi-native:
+comments:
+  style: any
+  length: full
