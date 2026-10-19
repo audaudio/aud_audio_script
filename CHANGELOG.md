@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-10-19
 
 ### Added
 
@@ -101,6 +101,9 @@
 - Add QuickJS-ng from gg_quickjs instead of vendored sources
 
 - Add gg_quickjs ^0.1.0 and build QuickJS-ng with its QuickjsNgBuild in the build hook; remove src/third_party/quickjs-ng
+
 - Take the QuickJS-ng sources of the native tests from the gg_quickjs package
+
 - Set the memory limit after the context exists and compile sources without it, against two out-of-memory bugs of QuickJS-ng 0.17.0
+
 - Keep the MIT notice of QuickJS-ng in NOTICES.md; document the dependency and the remaining risk

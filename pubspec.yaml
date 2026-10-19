@@ -1,6 +1,6 @@
 name: aud_audio_script
 description: "Script modulation of the Audanika Audio Engine: the node aud.script.modulator runs JavaScript on QuickJS-ng in a worker of its own and sends controls once per audio buffer; optional, apps add it explicitly"
-version: 0.0.1
+version: 0.1.0
 publish_to: none
 homepage: https://github.com/audaudio/aud_audio_script
 repository: https://github.com/audaudio/aud_audio_script
