@@ -73,7 +73,21 @@
 - Add steps on the real grid point and room for requests
 
 - Find the frame of a step's grid point in the transport of the block that emits it, so steps land on the grid point when blocks vary in size
+
 - Keep room in the request ring for this block's request and the next block's lookahead when input events flood it
+
 - Let the counting allocator free a block on realloc to 0 bytes
+
 - Document that offline renders are deterministic from the first offline block on
+
 - Test blocks of 180, 192 and 204 frames at lookahead 3, an event flood with a lookahead increase and the allocator
+
+- Add the review fixes of the script modulator
+
+- Keep one undo entry per pair a tick touches, so that a loop of sends no longer grows the undo log without bound
+- Keep the sends of a load only for a runner with a send log, the simulation's
+- Cut a console line at 4096 bytes on a whole UTF-8 character, also inside a single argument
+- Share the defaults and limits and the load, budget and timing helpers of the node, the simulation and the bench
+- Correct the comments on where the worker runs, on the lookahead of a simulated control change and on the bench output in the READMEs
+- List the remaining public types in the Dart API of both READMEs
+- Test the console cut, the sends of a load and a second send to a pair in an aborted tick

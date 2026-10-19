@@ -25,8 +25,6 @@ namespace aud_script {
 namespace {
 
 constexpr uint32_t kMaxBlocks = 1000000;
-constexpr uint32_t kMaxLookahead = 4;
-constexpr size_t kMegabyte = 1024u * 1024u;
 
 // What the thread of a simulation works on.
 struct AudSimulationJob {
@@ -49,10 +47,9 @@ bool valid(const AudScriptSimulationRequest* request) {
       request->blocks > kMaxBlocks) {
     return false;
   }
-  if (!(request->sample_rate >= 8000 && request->sample_rate <= 384000)) {
+  if (!audScriptValidTiming(request->sample_rate, request->tempo)) {
     return false;
   }
-  if (!(request->tempo >= 1 && request->tempo <= 999)) return false;
   if (request->lookahead > kMaxLookahead) return false;
   if (request->num_events > 0 && request->events == nullptr) return false;
   for (uint32_t i = 0; i < request->num_events; ++i) {
@@ -73,11 +70,8 @@ void simulate(AudSimulationJob& job) {
     job.console += '\n';
   };
   runner.onError = [&job](const std::string& text) { job.error = text; };
-  AudScriptLoad load;
-  load.source = request.source;
-  if (request.name != nullptr && request.name[0] != 0) load.name = request.name;
-  load.memoryLimit =
-      (request.memory_limit_mb > 0 ? request.memory_limit_mb : 32) * kMegabyte;
+  const AudScriptLoad load =
+      audScriptLoadOf(request.source, request.name, request.memory_limit_mb);
   std::string error;
   std::unique_ptr<AudScriptState> state = runner.load(load, &job.times, &error);
   if (state == nullptr) {
@@ -98,10 +92,7 @@ void simulate(AudSimulationJob& job) {
   const double frames = request.frames;
   const double beatsPerBlock =
       frames * request.tempo / 60 / request.sample_rate;
-  const int64_t budgetNs =
-      static_cast<int64_t>(request.tick_budget_ms > 0 ? request.tick_budget_ms
-                                                      : 100) *
-      1000000LL;
+  const int64_t budgetNs = audScriptBudgetNs(request.tick_budget_ms);
   // The events of block j reach the tick of block j + lookahead.
   const uint32_t lookahead = request.lookahead > 0 ? request.lookahead : 1;
   std::vector<AudScriptInput> inputs;

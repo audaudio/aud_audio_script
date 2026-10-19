@@ -110,6 +110,8 @@ AUD_TEST(the_values_undo_an_aborted_tick) {
   values.commit();
   values.begin();
   AUD_CHECK(values.set(0, 1, 0.75f) == nullptr);
+  // A second send to the pair: the undo restores the value before the tick.
+  AUD_CHECK(values.set(0, 1, 0.875f) == nullptr);
   AUD_CHECK(values.set(3, 3, 1.0f) == nullptr);
   AUD_CHECK(values.set(3, 3, 0.0f) == nullptr);
   AUD_CHECK(values.size() == 3);
@@ -303,6 +305,47 @@ AUD_TEST(creates_its_contexts_on_quickjs) {
   AUD_CHECK(context != nullptr && context->memoryUsed() > 0);
   AUD_CHECK(context->evaluate("var version = 1;", "probe.js", 0, &error) ==
             AUD_SCRIPT_TICK_OK);
+}
+
+AUD_TEST(cuts_a_console_line_at_a_whole_character) {
+  // A sink that keeps the console lines.
+  struct LineSink : NullSink {
+    std::vector<std::string> lines;
+    void log(const std::string& line) override { lines.push_back(line); }
+  };
+  LineSink sink;
+  std::string error;
+  std::unique_ptr<AudScriptContext> context =
+      audScriptCreateQuickJs(4u * 1024u * 1024u, &sink, &error);
+  AUD_CHECK(context != nullptr);
+  if (context == nullptr) return;
+  // "x" and 3000 characters of two bytes: the cut at kScriptMaxText bytes
+  // falls inside a character and moves before it.
+  AUD_CHECK(context->evaluate("console.log('x' + '\\u00e4'.repeat(3000));\n"
+                              "console.log('a'.repeat(5000), 'b');\n"
+                              "console.log('a', 'b');",
+                              "log.js", 0, &error) == AUD_SCRIPT_TICK_OK);
+  AUD_CHECK(sink.lines.size() == 3);
+  if (sink.lines.size() != 3) return;
+  AUD_CHECK(sink.lines[0].size() == kScriptMaxText - 1);
+  AUD_CHECK(sink.lines[0].substr(sink.lines[0].size() - 2) == "\xC3\xA4");
+  AUD_CHECK(sink.lines[1] == std::string(kScriptMaxText, 'a'));
+  AUD_CHECK(sink.lines[2] == "a b");
+}
+
+AUD_TEST(keeps_the_sends_of_a_load_only_for_a_send_log) {
+  AudScriptLoad load;
+  load.source = "for (var i = 0; i < 100; ++i) aud.send(0, 1, i);";
+  AudScriptRunner runner;
+  std::string error;
+  std::unique_ptr<AudScriptState> state = runner.load(load, nullptr, &error);
+  AUD_CHECK(state != nullptr && state->loadSends.empty());
+  AUD_CHECK(state != nullptr && state->values.size() == 1 &&
+            state->values.valueAt(0) == 99);
+  std::vector<AudScriptSend> log;
+  runner.sendLog = &log;
+  state = runner.load(load, nullptr, &error);
+  AUD_CHECK(state != nullptr && state->loadSends.size() == 100);
 }
 
 // ############################################################################

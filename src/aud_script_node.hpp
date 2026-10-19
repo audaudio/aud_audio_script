@@ -107,10 +107,10 @@ struct AudScriptLoadCommand {
 class AudScriptNode {
  public:
   // The entries of the ring to the worker and the results in flight: more
-  // than the largest lookahead plus one.
+  // than the largest lookahead, kMaxLookahead, plus one.
   static constexpr size_t kRingEntries = 2048;
   static constexpr size_t kResults = 8;
-  static constexpr uint32_t kMaxLookahead = 4;
+  static_assert(kResults > kMaxLookahead + 1, "a result per block in flight");
 
   // [control] Creates a node and starts its worker; nullptr when memory or
   // the thread is refused.

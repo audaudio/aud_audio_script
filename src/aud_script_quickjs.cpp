@@ -17,6 +17,7 @@
 // memory limit in its own allocation wrappers, before it calls these
 // functions, so JS_SetMemoryLimit works as with its default allocator.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -67,9 +68,6 @@ const JSMallocFunctions kHeapFunctions = {heapCalloc, heapMalloc, heapFree,
 const char* const kTimeFields[] = {"beat",       "tempo",  "playing",
                                    "sampleRate", "frames", "tick"};
 constexpr int kNumTimeFields = 6;
-
-// The longest console line, in bytes.
-constexpr size_t kMaxLine = 4096;
 
 class AudQuickJsContext final : public AudScriptContext {
  public:
@@ -214,7 +212,8 @@ class AudQuickJsContext final : public AudScriptContext {
     return JS_UNDEFINED;
   }
 
-  // console.log(...args): the arguments as strings, joined by spaces.
+  // console.log(...args): the arguments as strings, joined by spaces, cut
+  // to kScriptMaxText bytes.
   static JSValue log(JSContext* ctx, JSValueConst, int argc,
                      JSValueConst* argv) {
     auto* self = static_cast<AudQuickJsContext*>(JS_GetContextOpaque(ctx));
@@ -223,8 +222,10 @@ class AudQuickJsContext final : public AudScriptContext {
       size_t length = 0;
       const char* text = JS_ToCStringLen(ctx, &length, argv[i]);
       if (text == nullptr) return JS_EXCEPTION;
-      if (i > 0) line += ' ';
-      if (line.size() < kMaxLine) line.append(text, length);
+      if (i > 0 && line.size() < kScriptMaxText) line += ' ';
+      const size_t room =
+          kScriptMaxText - std::min(line.size(), kScriptMaxText);
+      line.append(text, audScriptClipLength(text, length, room));
       JS_FreeCString(ctx, text);
     }
     self->sink_->log(line);

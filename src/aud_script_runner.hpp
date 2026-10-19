@@ -26,6 +26,24 @@
 namespace aud_script {
 
 // ############################################################################
+// The defaults and limits
+
+// The defaults and limits that the node, the simulation and the bench
+// share: the memory limit of a context in MB, the budget of a tick in ms,
+// the largest lookahead in blocks.
+constexpr size_t kMegabyte = 1024u * 1024u;
+constexpr uint32_t kDefaultMemoryLimitMb = 32;
+constexpr uint32_t kDefaultTickBudgetMs = 100;
+constexpr uint32_t kMaxLookahead = 4;
+
+// Whether a sample rate (8 to 384 kHz) and a tempo (1 to 999 BPM) are what
+// a simulation or a bench takes.
+bool audScriptValidTiming(double sampleRate, double tempo);
+
+// The budget of a tick in ns from `tickBudgetMs`; 0 takes the default.
+int64_t audScriptBudgetNs(uint32_t tickBudgetMs);
+
+// ############################################################################
 // The tick grid
 
 // The block a tick is computed for: its number, the beat at its first frame,
@@ -53,20 +71,21 @@ AudScriptGrid audScriptGrid(const AudScriptBlock& block);
 
 // The values a context sent, one per (output, id) pair, in the order the
 // pairs were first sent; at most AUD_SCRIPT_MAX_VALUES pairs. The changes
-// of a tick are undone when the tick is aborted.
+// of a tick are undone when the tick is aborted; the undo log keeps one
+// entry per pair a tick touched, however often the script sends to it.
 class AudScriptValues {
  public:
   AudScriptValues();
 
   // Opens the changes of a tick.
-  void begin() { undo_.clear(); }
+  void begin() { restart(); }
 
   // Sets the value of a pair; the message of a RangeError when the pair is
   // new and the values are full.
   const char* set(uint32_t output, uint32_t id, float value);
 
   // Keeps the changes since begin(), or undoes them.
-  void commit() { undo_.clear(); }
+  void commit() { restart(); }
   void rollback();
 
   // The pairs and their values.
@@ -81,10 +100,21 @@ class AudScriptValues {
     float old;
     bool added;
   };
+
+  // Empties the undo log; the next send to a pair logs its value again.
+  void restart() {
+    undo_.clear();
+    generation_ += 1;
+  }
+
   std::vector<int16_t> index_;
   std::vector<uint16_t> pairs_;
   std::vector<float> values_;
   std::vector<Undo> undo_;
+  // The undo log that holds the old value of each slot, by its generation,
+  // which restart() advances.
+  std::vector<uint64_t> logged_;
+  uint64_t generation_ = 0;
 };
 
 // One aud.send call.
@@ -122,7 +152,8 @@ class AudScriptState final : public AudScriptSink {
   std::string name;
   size_t memoryLimit = 0;
   // The sends of the load, which become the values the context starts
-  // with; the simulation reports them with the first tick.
+  // with; kept only for a runner with a send log - the simulation reports
+  // them with the first tick.
   std::vector<AudScriptSend> loadSends;
   bool loading = false;
 
@@ -137,8 +168,13 @@ class AudScriptState final : public AudScriptSink {
 struct AudScriptLoad {
   std::string source;
   std::string name = "script";
-  size_t memoryLimit = 32u * 1024u * 1024u;
+  size_t memoryLimit = kDefaultMemoryLimitMb * kMegabyte;
 };
+
+// The load of `source` named `name` (NULL or "": "script") with a heap of
+// `memoryLimitMb` MB (0: the default), as a simulation or a bench asks.
+AudScriptLoad audScriptLoadOf(const char* source, const char* name,
+                              uint32_t memoryLimitMb);
 
 // The times of a load in µs and the bytes the new context holds.
 struct AudScriptLoadTimes {

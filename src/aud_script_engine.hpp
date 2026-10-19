@@ -101,6 +101,13 @@ std::unique_ptr<AudScriptContext> audScriptCreateQuickJs(size_t memoryLimit,
 // integer from 0 to 15, the id one from 0 to 511, the value finite.
 const char* audScriptCheckSend(double output, double id, double value);
 
+// The longest console line and error text the package keeps, in bytes.
+constexpr size_t kScriptMaxText = 4096;
+
+// How many of the `length` bytes of `text` fit into `limit` bytes without
+// splitting a UTF-8 sequence.
+size_t audScriptClipLength(const char* text, size_t length, size_t limit);
+
 }  // namespace aud_script
 
 #endif  // AUD_SCRIPT_ENGINE_HPP

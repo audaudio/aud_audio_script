@@ -12,13 +12,7 @@
 namespace aud_script {
 
 std::string audScriptClip(const std::string& text, size_t limit) {
-  if (text.size() <= limit) return text;
-  size_t end = limit;
-  // Back to the start of a UTF-8 sequence: continuation bytes are 10xxxxxx.
-  while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) {
-    end -= 1;
-  }
-  return text.substr(0, end);
+  return text.substr(0, audScriptClipLength(text.data(), text.size(), limit));
 }
 
 AudScriptGlobalStats& AudScriptGlobalStats::get() {

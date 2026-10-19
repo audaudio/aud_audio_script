@@ -19,10 +19,11 @@ import 'aud_script_worker_cores.dart';
 
 // #############################################################################
 /// The speed of a script (ticket 31, scope 3): loads it into a context on a
-/// worker thread placed like a modulator's - on Android the fast cores with
-/// an audio priority, on Apple platforms user-interactive - and times its
-/// ticks, by default one per block duration as the audio callback paces a
-/// worker. A bench on the main thread would measure another core.
+/// worker thread placed like a modulator's - on Android and Linux on the
+/// cores `workerCores` names with a raised priority, on Apple platforms
+/// user-interactive - and times its ticks, by default one per block
+/// duration as the audio callback paces a worker. A bench on the main
+/// thread would measure another core.
 ///
 /// ```dart
 /// final result = AudScriptBench.measure(AudScriptBench.syntheticScript);

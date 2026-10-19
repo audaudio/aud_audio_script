@@ -5,8 +5,9 @@
 // found in the LICENSE file in the root of this package.
 
 // The bench of the package (ticket 31, scope 3): the ticks of a script on a
-// worker thread placed like the worker of a node - on Android the fast
-// cores with an audio priority, on Apple platforms user-interactive - and
+// worker thread placed like the worker of a node - on Android and Linux on
+// any core or, with AUD_SCRIPT_BENCH_FAST_CORES, on the fast cores, with
+// the raised priority either way; on Apple platforms user-interactive - and
 // by default paced at the duration of a block, as the audio callback paces
 // the worker; a bench on the main thread measures another core and another
 // clock (ticket 28). Reports the tick times, the creation of the context,
@@ -30,7 +31,6 @@
 namespace aud_script {
 namespace {
 
-constexpr size_t kMegabyte = 1024u * 1024u;
 constexpr uint32_t kMaxTicks = 10000000;
 
 struct AudBenchJob {
@@ -49,10 +49,7 @@ bool valid(const AudScriptBenchRequest* request,
       request->warmup_ticks > kMaxTicks) {
     return false;
   }
-  if (!(request->sample_rate >= 8000 && request->sample_rate <= 384000)) {
-    return false;
-  }
-  return request->tempo >= 1 && request->tempo <= 999;
+  return audScriptValidTiming(request->sample_rate, request->tempo);
 }
 
 // The value below which `share` of the sorted `times` lie.
@@ -73,11 +70,8 @@ void bench(AudBenchJob& job) {
   result.cpus = placement.cpus;
   result.qos_class = placement.qos;
   AudScriptRunner runner;
-  AudScriptLoad load;
-  load.source = request.source;
-  if (request.name != nullptr && request.name[0] != 0) load.name = request.name;
-  load.memoryLimit =
-      (request.memory_limit_mb > 0 ? request.memory_limit_mb : 32) * kMegabyte;
+  const AudScriptLoad load =
+      audScriptLoadOf(request.source, request.name, request.memory_limit_mb);
   AudScriptLoadTimes times;
   std::string error;
   std::unique_ptr<AudScriptState> state = runner.load(load, &times, &error);
@@ -96,10 +90,7 @@ void bench(AudBenchJob& job) {
       frames * request.tempo / 60 / request.sample_rate;
   const double blockUs = frames / request.sample_rate * 1e6;
   result.block_us = blockUs;
-  const int64_t budgetNs =
-      static_cast<int64_t>(request.tick_budget_ms > 0 ? request.tick_budget_ms
-                                                      : 100) *
-      1000000LL;
+  const int64_t budgetNs = audScriptBudgetNs(request.tick_budget_ms);
   const bool paced = (request.flags & AUD_SCRIPT_BENCH_UNPACED) == 0;
   const uint32_t total = request.warmup_ticks + request.ticks;
   std::vector<double> timed;

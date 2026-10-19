@@ -6,7 +6,8 @@
 
 // #############################################################################
 /// A MIDI control change at an absolute frame of a simulation: it reaches
-/// `aud.onControlChange` before the tick of the block after its own.
+/// `aud.onControlChange` before the tick of the block `lookahead` blocks
+/// after its own, by default the next one.
 class AudScriptControlChange {
   /// Creates a control change.
   const AudScriptControlChange({

@@ -54,11 +54,11 @@ const AudParamDescriptor kParams[AUD_SCRIPT_NUM_PARAMS] = {
     AUD_SCRIPT_MODE(14),
     AUD_SCRIPT_MODE(15),
     {sizeof(AudParamDescriptor), "memory_limit", "Memory limit", "MB", 1.0f,
-     1024.0f, 32.0f, kStepped, 1024, 0},
+     1024.0f, static_cast<float>(kDefaultMemoryLimitMb), kStepped, 1024, 0},
     {sizeof(AudParamDescriptor), "tick_budget", "Tick budget", "ms", 1.0f,
-     10000.0f, 100.0f, kStepped, 10000, 0},
-    {sizeof(AudParamDescriptor), "lookahead", "Lookahead", "blocks", 1.0f, 4.0f,
-     3.0f, kStepped, 4, 0},
+     10000.0f, static_cast<float>(kDefaultTickBudgetMs), kStepped, 10000, 0},
+    {sizeof(AudParamDescriptor), "lookahead", "Lookahead", "blocks", 1.0f,
+     static_cast<float>(kMaxLookahead), 3.0f, kStepped, kMaxLookahead, 0},
     {sizeof(AudParamDescriptor), "worker_cores", "Worker cores", "", 0.0f, 1.0f,
      0.0f, kStepped, 2, 0},
 };
@@ -158,14 +158,24 @@ constexpr int64_t kWaitSliceNs = 100000000LL;
 // The interval of the memory measurement and of the placement check.
 constexpr int64_t kMeasureIntervalNs = 1000000000LL;
 
-constexpr size_t kMegabyte = 1024u * 1024u;
-
 bool sameBits(float a, float b) {
   uint32_t x = 0;
   uint32_t y = 0;
   std::memcpy(&x, &a, sizeof(x));
   std::memcpy(&y, &b, sizeof(y));
   return x == y;
+}
+
+// The input of an event entry of the ring.
+AudScriptInput inputOf(const AudScriptEntry& entry) {
+  AudScriptInput input;
+  input.kind = entry.kind == AudScriptEntry::kControlChange
+                   ? AudScriptInput::kControlChange
+                   : AudScriptInput::kControl;
+  input.channel = entry.channel;
+  input.number = entry.number;
+  input.value = entry.value;
+  return input;
 }
 
 }  // namespace
@@ -212,6 +222,7 @@ AudScriptNode::AudScriptNode(const AudHostApi* host)
   // The statistics exist before the audio thread counts into them.
   AudScriptGlobalStats::get();
   inputs_.reserve(kRingEntries);
+  batch_.reserve(kRingEntries);
   runner_.onConsole = [](const std::string& line) {
     AudScriptGlobalStats::get().addConsoleLine(line);
   };
@@ -731,14 +742,7 @@ void AudScriptNode::workerMain() {
     for (size_t i = 0; i < batch_.size(); ++i) {
       const AudScriptEntry& e = batch_[i];
       if (e.kind != AudScriptEntry::kRequest) {
-        AudScriptInput input;
-        input.kind = e.kind == AudScriptEntry::kControlChange
-                         ? AudScriptInput::kControlChange
-                         : AudScriptInput::kControl;
-        input.channel = e.channel;
-        input.number = e.number;
-        input.value = e.value;
-        inputs_.push_back(input);
+        inputs_.push_back(inputOf(e));
       } else if (!behind || i == newest) {
         runRequest(e);
       }

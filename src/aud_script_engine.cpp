@@ -30,4 +30,14 @@ const char* audScriptCheckSend(double output, double id, double value) {
   return nullptr;
 }
 
+size_t audScriptClipLength(const char* text, size_t length, size_t limit) {
+  if (length <= limit) return length;
+  size_t end = limit;
+  // Back to the start of a UTF-8 sequence: continuation bytes are 10xxxxxx.
+  while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) {
+    end -= 1;
+  }
+  return end;
+}
+
 }  // namespace aud_script

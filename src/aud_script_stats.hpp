@@ -23,6 +23,7 @@
 #include <string>
 
 #include "aud_audio_script.h"
+#include "aud_script_engine.hpp"
 #include "aud_script_placement.hpp"
 
 namespace aud_script {
@@ -98,7 +99,7 @@ class AudScriptGlobalStats {
   // The console lines kept.
   static constexpr size_t kConsoleLines = 64;
   // The longest console line and error text kept, in bytes.
-  static constexpr size_t kMaxText = 4096;
+  static constexpr size_t kMaxText = kScriptMaxText;
 
   static AudScriptGlobalStats& get();
 

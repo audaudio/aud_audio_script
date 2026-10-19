@@ -5,11 +5,12 @@
 // found in the LICENSE file in the root of this package.
 
 // Where a worker of the package runs (ticket 31, plan check 3): on Android
-// it binds itself to the fast cores and raises its priority, on Apple
-// platforms it asks for the quality of service class user-interactive. The
-// audio thread of aud_audio_io runs on the fast cores since io-003; a
-// worker left where the system puts it lands on the small cores of a
-// big.LITTLE device and misses the blocks.
+// and Linux it raises its priority and runs on any core or, as
+// "worker_cores" asks, bound to the fast cores; on Apple platforms it asks
+// for the quality of service class user-interactive. Any core is the
+// default: a worker bound to the fast cores of a big.LITTLE device whose
+// idle big cores the kernel isolates waits on the core of the audio thread
+// that woke it (aud_audio_script.h, AUD_SCRIPT_CORES_ANY).
 
 #ifndef AUD_SCRIPT_PLACEMENT_HPP
 #define AUD_SCRIPT_PLACEMENT_HPP

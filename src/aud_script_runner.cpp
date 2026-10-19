@@ -14,6 +14,29 @@
 namespace aud_script {
 
 // ############################################################################
+// The defaults and limits
+
+bool audScriptValidTiming(double sampleRate, double tempo) {
+  return sampleRate >= 8000 && sampleRate <= 384000 && tempo >= 1 &&
+         tempo <= 999;
+}
+
+int64_t audScriptBudgetNs(uint32_t tickBudgetMs) {
+  const uint32_t ms = tickBudgetMs > 0 ? tickBudgetMs : kDefaultTickBudgetMs;
+  return static_cast<int64_t>(ms) * 1000000LL;
+}
+
+AudScriptLoad audScriptLoadOf(const char* source, const char* name,
+                              uint32_t memoryLimitMb) {
+  AudScriptLoad load;
+  load.source = source;
+  if (name != nullptr && name[0] != 0) load.name = name;
+  load.memoryLimit =
+      (memoryLimitMb > 0 ? memoryLimitMb : kDefaultMemoryLimitMb) * kMegabyte;
+  return load;
+}
+
+// ############################################################################
 // The tick grid
 
 AudScriptGrid audScriptGrid(const AudScriptBlock& block) {
@@ -41,16 +64,23 @@ AudScriptGrid audScriptGrid(const AudScriptBlock& block) {
 // The values
 
 AudScriptValues::AudScriptValues()
-    : index_(AUD_SCRIPT_NUM_OUTPUTS * AUD_SCRIPT_NUM_IDS, -1) {
+    : index_(AUD_SCRIPT_NUM_OUTPUTS * AUD_SCRIPT_NUM_IDS, -1),
+      logged_(AUD_SCRIPT_MAX_VALUES, 0) {
   pairs_.reserve(64);
   values_.reserve(64);
+  undo_.reserve(AUD_SCRIPT_MAX_VALUES);
 }
 
 const char* AudScriptValues::set(uint32_t output, uint32_t id, float value) {
   const uint32_t pair = output * AUD_SCRIPT_NUM_IDS + id;
   const int16_t slot = index_[pair];
   if (slot >= 0) {
-    undo_.push_back(Undo{static_cast<uint32_t>(slot), values_[slot], false});
+    // The value before the tick; later sends of the tick change nothing
+    // that an undo needs.
+    if (logged_[slot] != generation_) {
+      logged_[slot] = generation_;
+      undo_.push_back(Undo{static_cast<uint32_t>(slot), values_[slot], false});
+    }
     values_[slot] = value;
     return nullptr;
   }
@@ -61,6 +91,7 @@ const char* AudScriptValues::set(uint32_t output, uint32_t id, float value) {
   index_[pair] = static_cast<int16_t>(added);
   pairs_.push_back(static_cast<uint16_t>(pair));
   values_.push_back(value);
+  logged_[added] = generation_;
   undo_.push_back(Undo{added, 0, true});
   return nullptr;
 }
@@ -75,7 +106,7 @@ void AudScriptValues::rollback() {
       values_[it->slot] = it->old;
     }
   }
-  undo_.clear();
+  restart();
 }
 
 // ############################################################################
@@ -89,10 +120,10 @@ const char* AudScriptState::send(double output, double id, double value) {
   message = values.set(o, i, static_cast<float>(value));
   if (message != nullptr) return message;
   const AudScriptSend record{o, i, value};
-  if (loading) {
-    loadSends.push_back(record);
-  } else {
+  if (!loading) {
     runner_->recordSend(record);
+  } else if (runner_->sendLog != nullptr) {
+    loadSends.push_back(record);
   }
   return nullptr;
 }
@@ -168,7 +199,6 @@ AudScriptTickResult AudScriptRunner::runTick(const AudScriptBlock& block,
   result.ran = true;
   const int64_t start = aud_clock_now_ns();
   const int64_t deadline = start + (budgetNs > 0 ? budgetNs : 1);
-  const size_t logged = sendLog != nullptr ? sendLog->size() : 0;
   if (loadSendsPending_ && sendLog != nullptr) {
     sendLog->insert(sendLog->end(), state->loadSends.begin(),
                     state->loadSends.end());
@@ -206,9 +236,8 @@ AudScriptTickResult AudScriptRunner::runTick(const AudScriptBlock& block,
     state->values.commit();
   } else {
     state->values.rollback();
-    if (sendLog != nullptr) {
-      sendLog->resize(tickStart > logged ? tickStart : logged);
-    }
+    // The sends of the load stay; those of the tick go.
+    if (sendLog != nullptr) sendLog->resize(tickStart);
     error(state->name, status == AUD_SCRIPT_TICK_INTERRUPTED
                            ? "the tick ran over its budget and was "
                              "interrupted: " +

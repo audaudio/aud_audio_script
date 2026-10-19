@@ -133,7 +133,7 @@ void main() {
   print(simulation.ticks.first); // tick 1 at beat 0.0212..., frame 254: ...
 
   final bench = AudScriptBench.measure(AudScriptBench.syntheticStressScript);
-  print(bench); // quickjs: mean ... µs, p99 ... µs per tick of a block of 5333.3 µs
+  print(bench); // mean ... µs, p50 ... µs, p99 ... µs, max ... µs per tick of a block of 5333.3 µs ...
 }
 ```
 
@@ -211,11 +211,11 @@ sodass Offline-Renderings deterministisch, nie zu spät und gleich der
 Simulation mit demselben Lookahead sind - ab dem ersten Offline-Block
 eines Graphen: Nach Live-Blöcken können die ersten `lookahead`
 Offline-Blöcke noch die Ticks verpassen, die der Worker live übersprungen
-hat (bekannt, nicht behoben). Ein Load baut einen neuen Kontext
-auf dem Worker und tauscht ihn vor dem ersten Tick ein, dessen Anfrage nach
-dem Load kam - die L vorher angefragten Blöcke ticken noch das alte
-Skript; ein fehlgeschlagener Load behält den alten Kontext und beendet den
-Load der Engine mit dem Fehler.
+hat (bekannt, nicht behoben). Ein Load baut einen neuen Kontext auf dem
+Worker und tauscht ihn vor dem ersten Tick ein, dessen Anfrage nach dem
+Load kam - die L vorher angefragten Blöcke ticken noch das alte Skript;
+ein fehlgeschlagener Load behält den alten Kontext und beendet den Load
+der Engine mit dem Fehler.
 
 ### Die Engine
 
@@ -283,6 +283,13 @@ Kern er seinen letzten Tick rechnete.
   taktgebundenen Breakpoint-Hüllkurven mit weichen Segmenten und
   Zielfunktionen auf drei Ausgängen; `syntheticStressScript` berechnet sie
   zehnmal pro Tick.
+- `AudScriptMode` und `AudScriptWorkerCores` sind die Werte der Parameter
+  `mode<n>` und `worker_cores`; `AudScriptPlacement` sagt, wo ein Worker
+  läuft; `AudScriptControlChange` ist eine Eingabe einer Simulation und
+  `AudScriptTickStatus` sagt, wie einer ihrer Ticks endete.
+  `AudScriptException` wird geworfen, wenn eine Engine den Knotentyp
+  ablehnt, wenn eine Simulation oder ein Bench nicht laufen kann oder wenn
+  ihr Skript nicht lädt.
 - Die Member, die die native Bibliothek aufrufen, sind mit `@RecordUse`
   markiert: In einem Profile- oder Release-Build behält der Link-Hook die
   Bibliothek nur, wenn die App einen davon nutzt.

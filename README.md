@@ -127,7 +127,7 @@ void main() {
   print(simulation.ticks.first); // tick 1 at beat 0.0212..., frame 254: ...
 
   final bench = AudScriptBench.measure(AudScriptBench.syntheticStressScript);
-  print(bench); // quickjs: mean ... µs, p99 ... µs per tick of a block of 5333.3 µs
+  print(bench); // mean ... µs, p50 ... µs, p99 ... µs, max ... µs per tick of a block of 5333.3 µs ...
 }
 ```
 
@@ -199,10 +199,11 @@ RealtimeSanitizer off around that wait only, so offline renders are
 deterministic, never late and equal to the simulation with the same
 lookahead - from the first offline block of a graph on: after live
 blocks, the first `lookahead` offline blocks may still miss the ticks the
-worker skipped live (known, not fixed). A load builds a new context on the worker and swaps it in
-before the first tick whose request came after the load - the L blocks
-requested before it still tick the old script; a failed load keeps the old
-context and ends the engine's load with the error.
+worker skipped live (known, not fixed). A load builds a new context on
+the worker and swaps it in before the first tick whose request came after
+the load - the L blocks requested before it still tick the old script; a
+failed load keeps the old context and ends the engine's load with the
+error.
 
 ### The engine
 
@@ -264,6 +265,12 @@ it ran its last tick on.
   `AudScriptBench.syntheticScript` is a public workload of beat-locked
   breakpoint envelopes with eased segments and target functions on three
   outputs; `syntheticStressScript` computes it ten times per tick.
+- `AudScriptMode` and `AudScriptWorkerCores` are the values of the
+  parameters `mode<n>` and `worker_cores`; `AudScriptPlacement` tells where
+  a worker runs; `AudScriptControlChange` is an input of a simulation and
+  `AudScriptTickStatus` how one of its ticks ended. `AudScriptException`
+  is thrown when an engine refuses the node type, when a simulation or a
+  bench cannot run, or when its script does not load.
 - The members that call the native library are recorded with
   `@RecordUse`: in a profile or release build the link hook keeps the
   library only when the app uses one of them.
