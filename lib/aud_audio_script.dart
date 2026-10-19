@@ -17,7 +17,6 @@ export 'src/aud_audio_script_version.dart';
 export 'src/aud_script_bench.dart';
 export 'src/aud_script_bench_result.dart';
 export 'src/aud_script_control_change.dart';
-export 'src/aud_script_engine.dart';
 export 'src/aud_script_exception.dart';
 export 'src/aud_script_mode.dart';
 export 'src/aud_script_modulator.dart';

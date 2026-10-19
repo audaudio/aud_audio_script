@@ -4,14 +4,13 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-// The thin engine interface of the package (ticket 31): a script context
-// that evaluates sources in its global scope, calls the handlers a script
-// set on `aud` and reports `aud.send` and `console.log` to a sink. Two
-// implementations: QuickJS-ng on every platform, with a runtime per
-// context, a memory limit and an interrupt for the time budget; and
-// JavaScriptCore through its public C API on Apple platforms, without
-// either, for comparisons and as a fallback. A context belongs to the
-// thread that created it.
+// The thin engine interface of the package (ticket 31), internal: a script
+// context that evaluates sources in its global scope, calls the handlers a
+// script set on `aud` and reports `aud.send` and `console.log` to a sink.
+// QuickJS-ng is its only implementation, on every platform, with a runtime
+// per context, a memory limit and an interrupt for the time budget; another
+// engine could come back behind it. A context belongs to the thread that
+// created it.
 //
 // The global scope a script sees:
 //
@@ -86,24 +85,17 @@ class AudScriptContext {
   virtual uint64_t memoryUsed() = 0;
 };
 
-// Creates a context of `engine` (AUD_SCRIPT_ENGINE_*) that reports to
-// `sink`; nullptr with a message in `error` when the engine is missing on
-// the platform or out of memory.
-std::unique_ptr<AudScriptContext> audScriptCreateContext(uint32_t engine,
-                                                         size_t memoryLimit,
+// Creates a context that reports to `sink`, with a heap of `memoryLimit`
+// bytes; nullptr with a message in `error` when memory runs out. The
+// engine behind it: QuickJS-ng.
+std::unique_ptr<AudScriptContext> audScriptCreateContext(size_t memoryLimit,
                                                          AudScriptSink* sink,
                                                          std::string* error);
 
-// The QuickJS-ng and the JavaScriptCore implementation; the latter returns
-// nullptr off Apple platforms.
+// The QuickJS-ng implementation.
 std::unique_ptr<AudScriptContext> audScriptCreateQuickJs(size_t memoryLimit,
                                                          AudScriptSink* sink,
                                                          std::string* error);
-std::unique_ptr<AudScriptContext> audScriptCreateJavaScriptCore(
-    AudScriptSink* sink, std::string* error);
-
-// Whether `engine` runs on this platform.
-bool audScriptEngineAvailable(uint32_t engine);
 
 // The message of a send with invalid arguments, or nullptr: the output an
 // integer from 0 to 15, the id one from 0 to 511, the value finite.

@@ -69,7 +69,6 @@ void main() {
           DateTime.now().difference(start).inMilliseconds,
           greaterThanOrEqualTo(80),
         );
-        expect(result.engine, AudScriptEngine.quickjs);
         expect(result.ticks, 30);
         expect(result.frames, 128);
         expect(result.sampleRate, 48000);
@@ -97,18 +96,6 @@ void main() {
         );
         expect(result.ticks, 20);
         expect(result.aborted, 0);
-      });
-
-      test('runs on JavaScriptCore on Apple platforms', () {
-        if (!Platform.isMacOS) return;
-        final result = AudScriptBench.measure(
-          AudScriptBench.syntheticScript,
-          engine: AudScriptEngine.javascriptCore,
-          ticks: 10,
-          paced: false,
-        );
-        expect(result.engine, AudScriptEngine.javascriptCore);
-        expect(result.memoryBytes, 0);
       });
 
       test('throws for a script that does not load', () {

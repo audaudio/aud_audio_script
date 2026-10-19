@@ -280,19 +280,14 @@ AUD_TEST(counts_the_memory_of_a_quickjs_context_as_it_allocates) {
   AUD_CHECK(context->memoryUsed() < 5u * 1024u * 1024u);
 }
 
-AUD_TEST(tells_which_engines_run_here) {
-  AUD_CHECK(aud_audio_script_engine_available(AUD_SCRIPT_ENGINE_QUICKJS) == 1);
-#if __APPLE__
-  AUD_CHECK(
-      aud_audio_script_engine_available(AUD_SCRIPT_ENGINE_JAVASCRIPTCORE) == 1);
-#else
-  AUD_CHECK(
-      aud_audio_script_engine_available(AUD_SCRIPT_ENGINE_JAVASCRIPTCORE) == 0);
-#endif
-  AUD_CHECK(aud_audio_script_engine_available(7) == 0);
+AUD_TEST(creates_its_contexts_on_quickjs) {
+  NullSink sink;
   std::string error;
-  AUD_CHECK(audScriptCreateContext(7, 1 << 20, nullptr, &error) == nullptr);
-  AUD_CHECK(error == "unknown engine");
+  std::unique_ptr<AudScriptContext> context =
+      audScriptCreateContext(1u << 20, &sink, &error);
+  AUD_CHECK(context != nullptr && context->memoryUsed() > 0);
+  AUD_CHECK(context->evaluate("var version = 1;", "probe.js", 0, &error) ==
+            AUD_SCRIPT_TICK_OK);
 }
 
 // ############################################################################
@@ -341,9 +336,6 @@ AUD_TEST(the_simulation_checks_its_arguments) {
   event.channel = 16;
   bad.events = &event;
   AUD_CHECK(refused(bad));
-  bad = request;
-  bad.engine = 7;
-  AUD_CHECK(aud_audio_script_simulate(&bad, &result) == AUD_ERROR_UNSUPPORTED);
   // Zero blocks run no tick.
   bad = request;
   bad.blocks = 0;
@@ -381,8 +373,7 @@ AUD_TEST(the_simulation_delivers_events_a_lookahead_later) {
                                                       {300, 0, 1, 1, 0}};
   for (const uint32_t lookahead : {0u, 1u, 3u}) {
     AudScriptSimulation* result =
-        simulate(script, 48000, 128, 120, 8, events, AUD_SCRIPT_ENGINE_QUICKJS,
-                 lookahead);
+        simulate(script, 48000, 128, 120, 8, events, lookahead);
     AUD_CHECK(result != nullptr);
     if (result == nullptr) continue;
     // Block 0 and block 2 hold the events.
@@ -552,9 +543,6 @@ AUD_TEST(the_bench_checks_its_arguments) {
   shortResult.struct_size = 8;
   AUD_CHECK(aud_audio_script_bench_run(&request, &shortResult) ==
             AUD_ERROR_INVALID_ARGUMENT);
-  bad = request;
-  bad.engine = 9;
-  AUD_CHECK(aud_audio_script_bench_run(&bad, &result) == AUD_ERROR_UNSUPPORTED);
   aud_audio_script_reset_stats();
   bad = request;
   bad.source = "syntax error here";
@@ -563,26 +551,6 @@ AUD_TEST(the_bench_checks_its_arguments) {
   AUD_CHECK(std::string(result.error).find("bench.js: SyntaxError") == 0);
   // The bench counts nothing into the statistics of the modulators.
   AUD_CHECK(lastError().empty());
-}
-
-AUD_TEST(the_bench_runs_on_javascriptcore_on_apple_platforms) {
-#if __APPLE__
-  const std::string source = syntheticScript(true);
-  AudScriptBenchRequest request{};
-  request.struct_size = sizeof(AudScriptBenchRequest);
-  request.engine = AUD_SCRIPT_ENGINE_JAVASCRIPTCORE;
-  request.source = source.c_str();
-  request.sample_rate = 48000;
-  request.tempo = 120;
-  request.frames = 256;
-  request.ticks = 20;
-  request.flags = AUD_SCRIPT_BENCH_UNPACED;
-  AudScriptBenchResult result{};
-  result.struct_size = sizeof(AudScriptBenchResult);
-  AUD_CHECK(aud_audio_script_bench_run(&request, &result) == AUD_OK);
-  AUD_CHECK(result.ticks == 20 && result.memory_bytes == 0 &&
-            result.mean_us > 0);
-#endif
 }
 
 // ############################################################################
@@ -794,14 +762,9 @@ AUD_TEST(the_node_refuses_what_it_cannot_take) {
   {
     Bare bare(nullptr);
     AUD_CHECK(bare.set(99, "x") == AUD_ERROR_INVALID_ARGUMENT);
-    AUD_CHECK(bare.set(AUD_SCRIPT_KEY_ENGINE, "v8") ==
+    // Nor is the key after the last one.
+    AUD_CHECK(bare.set(AUD_SCRIPT_NUM_KEYS, "quickjs") ==
               AUD_ERROR_INVALID_ARGUMENT);
-#if __APPLE__
-    AUD_CHECK(bare.set(AUD_SCRIPT_KEY_ENGINE, "javascriptcore") == AUD_OK);
-#else
-    AUD_CHECK(bare.set(AUD_SCRIPT_KEY_ENGINE, "javascriptcore") ==
-              AUD_ERROR_UNSUPPORTED);
-#endif
     AUD_CHECK(bare.set(AUD_SCRIPT_KEY_SCRIPT_NAME, nullptr) == AUD_OK);
     // Without a host to report it, a load returns AUD_OK.
     AUD_CHECK(bare.set(AUD_SCRIPT_KEY_SCRIPT, nullptr) == AUD_OK);
@@ -832,18 +795,6 @@ AUD_TEST(the_node_refuses_what_it_cannot_take) {
     AUD_CHECK(host.waitEnd(second) == AUD_ERROR_CANCELLED);
     AUD_CHECK(host.waitEnd(first) == AUD_OK ||
               host.waitEnd(first) == AUD_ERROR_CANCELLED);
-  }
-  {
-    Bare bare(&host.api);
-    const int32_t id =
-        bare.set(AUD_SCRIPT_KEY_SCRIPT, "aud.onTick = function () {};");
-    AUD_CHECK(id > 0);
-    // The engine setting loads the script again.
-#if __APPLE__
-    const int32_t again = bare.set(AUD_SCRIPT_KEY_ENGINE, "javascriptcore");
-    AUD_CHECK(again > id);
-    AUD_CHECK(host.waitEnd(again) == AUD_OK);
-#endif
   }
 }
 

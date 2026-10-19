@@ -265,8 +265,6 @@ async function build(name, compiler, variantFlags, context) {
   if (!fs.existsSync(binary)) {
     const flags = [...variantFlags, ...objects, '-o', binary];
     if (process.platform !== 'win32') flags.push('-lpthread');
-    // The JavaScriptCore engine of the package on Apple platforms.
-    if (process.platform === 'darwin') flags.push('-framework', 'JavaScriptCore');
     const result = spawnSync(compiler, flags, { encoding: 'utf8' });
     if (result.status !== 0) {
       process.stderr.write(result.stdout + result.stderr);

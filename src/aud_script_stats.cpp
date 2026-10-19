@@ -43,13 +43,12 @@ void AudScriptGlobalStats::countTick(double us, int32_t status) {
 }
 
 void AudScriptGlobalStats::countLoad(int32_t result, double createUs,
-                                     double loadUs, uint32_t engine) {
+                                     double loadUs) {
   loads_.fetch_add(1, std::memory_order_relaxed);
   if (result != AUD_OK) {
     failedLoads_.fetch_add(1, std::memory_order_relaxed);
     return;
   }
-  engine_.store(engine, std::memory_order_relaxed);
   std::lock_guard<std::mutex> lock(mutex_);
   createUs_ = createUs;
   loadUs_ = loadUs;
@@ -76,7 +75,6 @@ void AudScriptGlobalStats::addConsoleLine(const std::string& line) {
 void AudScriptGlobalStats::read(AudScriptStats* stats) const {
   AudScriptStats s = {};
   s.struct_size = sizeof(AudScriptStats);
-  s.engine = engine_.load(std::memory_order_relaxed);
   s.ticks = ticks_.load(std::memory_order_acquire);
   s.late_ticks = lateTicks_.load(std::memory_order_relaxed);
   s.skipped_requests = skippedRequests_.load(std::memory_order_relaxed);

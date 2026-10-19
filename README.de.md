@@ -45,9 +45,8 @@ Eine App hängt von `aud_audio` und den DSP-Paketen ab, die sie nutzt, und
 registriert sie bei ihrer Engine. Der Build-Hook kompiliert das
 mitgelieferte QuickJS-ng als C und den Knoten als C++17 mit der Toolchain
 des Ziels gegen den ABI-Header von `aud_audio_core` zu einer Bibliothek
-pro Architektur (iOS, Android, macOS; Linux und Windows im Prinzip); auf
-Apple-Plattformen linkt er das JavaScriptCore des Systems für die zweite
-Engine. Das Paket braucht kein Flutter. Die nativen Tests brauchen
+pro Architektur (iOS, Android, macOS; Linux und Windows im Prinzip). Das
+Paket braucht kein Flutter. Die nativen Tests brauchen
 Node.js und `clang++`; ihr RealtimeSanitizer-Build braucht einen clang,
 der ihn hat, z. B. LLVM aus Homebrew auf macOS (`brew install llvm`), und
 wird ohne ihn übersprungen.
@@ -210,16 +209,14 @@ dem Load kam - die L vorher angefragten Blöcke ticken noch das alte
 Skript; ein fehlgeschlagener Load behält den alten Kontext und beendet den
 Load der Engine mit dem Fehler.
 
-### Die Engines
+### Die Engine
 
-QuickJS-ng 0.17.0 (MIT) ist mitgeliefert und läuft auf jeder Plattform:
-eine Runtime pro Kontext mit einem Speicherlimit (`memory_limit`, 32 MB)
-und einem Interrupt-Handler, der einen Tick nach `tick_budget` (100 ms)
-stoppt; ein abgebrochener Tick verwirft seine Werte. Auf Apple-Plattformen
-wählt die String-Einstellung `engine` stattdessen das JavaScriptCore des
-Systems über seine öffentliche C-API, für Vergleiche und als Rückfall: Es
-hat weder Speicherlimit noch Zeitbudget - ein davonlaufendes Skript
-blockiert den Worker - und nennt seinen Speicher nicht.
+QuickJS-ng 0.17.0 (MIT) ist mitgeliefert und führt die Skripte auf jeder
+Plattform aus: eine Runtime pro Kontext mit einem Speicherlimit
+(`memory_limit`, 32 MB) und einem Interrupt-Handler, der einen Tick nach
+`tick_budget` (100 ms) stoppt; ein abgebrochener Tick verwirft seine
+Werte. Es sitzt hinter einer dünnen Engine-Schnittstelle im Paket, die
+nicht öffentlich ist.
 
 Der Worker hat einen Stack von 4 MB und wird auf dem Control-Thread
 erzeugt. Auf Android bindet er sich an die schnellen Kerne - die Kerne
@@ -237,11 +234,6 @@ user-interactive. Die Statistiken sagen, wo er läuft.
   den Rest; der Graph verwirft und zählt sie.
 - Ein Kontext hält höchstens 1024 Paare (Ausgang, Id); ein Send an ein
   weiteres wirft einen RangeError.
-- JavaScriptCore hat weder Speicherlimit noch Zeitbudget: Ein
-  davonlaufendes Skript blockiert den Worker, ein Offline-Block wartet
-  höchstens Tick-Budget plus 11 Sekunden auf ihn, und der Knoten wartet
-  beim Zerstören auf den laufenden Tick. Sein Speicher wird als 0
-  gemeldet.
 - Der Speicher eines QuickJS-ng-Kontexts ist der Zähler seines
   Allokators: die Bytes des Systemallokators, die er hält, nach ihrer
   nutzbaren Größe.
@@ -251,10 +243,9 @@ user-interactive. Die Statistiken sagen, wo er läuft.
 - `AudAudioScript`: `name` und `register` für die Paketliste einer Engine,
   `registerWith` für die Host-API eines Graphen.
 - `AudScriptModulator`: die Typ-Id, die Event-Ids, die String-Einstellungen
-  (`script`, `script_name`, `engine`), die Parameter (`mode0` bis
-  `mode15`, `memory_limit`, `tick_budget`, `lookahead`) mit ihren
-  Deskriptoren,
-  `engineAvailable`, `stats()` und `resetStats()` der prozessweiten
+  (`script`, `script_name`), die Parameter (`mode0` bis `mode15`,
+  `memory_limit`, `tick_budget`, `lookahead`) mit ihren Deskriptoren,
+  `stats()` und `resetStats()` der prozessweiten
   `AudScriptStats` - Ticks, späte Ticks, übersprungene Anfragen,
   abgebrochene Ticks, Tick-Zeiten mit p50 und p99, die Platzierung des
   Workers, der letzte Load und sein Speicher, der letzte Fehler und die

@@ -4,7 +4,6 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'aud_script_engine.dart';
 import 'aud_script_placement.dart';
 
 // #############################################################################
@@ -15,7 +14,6 @@ import 'aud_script_placement.dart';
 class AudScriptBenchResult {
   /// Creates a result.
   const AudScriptBenchResult({
-    required this.engine,
     required this.sampleRate,
     required this.frames,
     required this.ticks,
@@ -38,7 +36,6 @@ class AudScriptBenchResult {
   // ...........................................................................
   /// The result as JSON, e.g. for the report of an integration test.
   Map<String, Object> toJson() => {
-    'engine': engine.settingValue,
     'sampleRate': sampleRate,
     'frames': frames,
     'ticks': ticks,
@@ -61,7 +58,7 @@ class AudScriptBenchResult {
 
   @override
   String toString() =>
-      '${engine.name}: mean ${_fixed(meanUs)} µs, p50 ${_fixed(p50Us)} µs, '
+      'mean ${_fixed(meanUs)} µs, p50 ${_fixed(p50Us)} µs, '
       'p99 ${_fixed(p99Us)} µs, max ${_fixed(maxUs)} µs per tick of a block of '
       '${_fixed(blockUs)} µs ($frames frames at ${sampleRate.round()} Hz); '
       '$overBlock over the block, $aborted aborted; context '
@@ -69,9 +66,6 @@ class AudScriptBenchResult {
       '$memoryBytes bytes; ${placement.name}';
 
   // ...........................................................................
-  /// The engine the script ran on.
-  final AudScriptEngine engine;
-
   /// The sample rate in Hz.
   final double sampleRate;
 
@@ -108,7 +102,7 @@ class AudScriptBenchResult {
   /// The evaluation of the script in µs.
   final double loadUs;
 
-  /// The bytes the context held after the ticks; 0 for JavaScriptCore.
+  /// The bytes the context held after the ticks.
   final int memoryBytes;
 
   /// Where the worker of the bench ran.

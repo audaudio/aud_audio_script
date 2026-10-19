@@ -81,12 +81,11 @@ class ScriptAppState extends State<ScriptApp> {
     super.dispose();
   }
 
-  /// Runs the bench of the synthetic workload on [engine].
-  void runBench(AudScriptEngine scriptEngine) {
+  /// Runs the bench of the synthetic workload.
+  void runBench() {
     try {
       final result = AudScriptBench.measure(
         AudScriptBench.syntheticScript,
-        engine: scriptEngine,
         ticks: 500,
       );
       setState(() => bench = '$result');
@@ -107,16 +106,12 @@ class ScriptAppState extends State<ScriptApp> {
           Text('$stats', key: const Key('stats')),
           if (stats.lastError.isNotEmpty) Text(stats.lastError),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            children: [
-              for (final scriptEngine in AudScriptEngine.values)
-                if (AudScriptModulator.engineAvailable(scriptEngine))
-                  FilledButton(
-                    onPressed: () => runBench(scriptEngine),
-                    child: Text('Bench ${scriptEngine.name}'),
-                  ),
-            ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton(
+              onPressed: runBench,
+              child: const Text('Bench'),
+            ),
           ),
           const SizedBox(height: 16),
           Text(bench, key: const Key('bench')),

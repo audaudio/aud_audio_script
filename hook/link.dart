@@ -57,7 +57,6 @@ const _bench = Class('AudScriptBench', Library(benchLibrary));
 const List<DefinitionWithStaticCalls> scriptMembers = [
   Getter('register', _registration),
   Method('registerWith', _registration),
-  Method('engineAvailable', _modulator),
   Method('stats', _modulator),
   Method('resetStats', _modulator),
   Method('simulate', _simulation),

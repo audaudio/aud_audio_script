@@ -12,7 +12,6 @@ import 'package:meta/meta.dart';
 
 import 'aud_audio_script_bindings_generated.dart' as bindings;
 import 'aud_script_control_change.dart';
-import 'aud_script_engine.dart';
 import 'aud_script_exception.dart';
 import 'aud_script_send.dart';
 import 'aud_script_tick.dart';
@@ -44,7 +43,6 @@ class AudScriptSimulation {
   /// worker and returns its ticks.
   ///
   /// - [name] the name of the script in error messages
-  /// - [engine] the JavaScript engine
   /// - [sampleRate] the sample rate in Hz, 8 to 384 kHz
   /// - [frames] the frames of a block
   /// - [tempo] the tempo in BPM, 1 to 999
@@ -57,14 +55,12 @@ class AudScriptSimulation {
   /// - [tickBudgetMs] the longest tick in ms
   ///
   /// Throws an [AudScriptException] with `AUD_ERROR_FAILED` and the error
-  /// of the script when it does not load, `AUD_ERROR_UNSUPPORTED` for an
-  /// engine the platform lacks and `AUD_ERROR_INVALID_ARGUMENT` for
-  /// arguments out of range.
+  /// of the script when it does not load and `AUD_ERROR_INVALID_ARGUMENT`
+  /// for arguments out of range.
   @RecordUse()
   static AudScriptSimulation simulate(
     String source, {
     String name = 'script',
-    AudScriptEngine engine = AudScriptEngine.quickjs,
     double sampleRate = 48000,
     int frames = 256,
     double tempo = 120,
@@ -87,7 +83,6 @@ class AudScriptSimulation {
     }
     request.ref
       ..struct_size = sizeOf<bindings.AudScriptSimulationRequest>()
-      ..engine = engine.id
       ..source = source.toNativeUtf8(allocator: arena).cast()
       ..name = name.toNativeUtf8(allocator: arena).cast()
       ..sample_rate = sampleRate

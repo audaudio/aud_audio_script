@@ -42,9 +42,8 @@ An app depends on `aud_audio` and on the DSP packages it uses, and
 registers them with its engine. The build hook compiles the vendored
 QuickJS-ng as C and the node as C++17 with the toolchain of the target
 against the ABI header of `aud_audio_core`, into one library per
-architecture (iOS, Android, macOS; Linux and Windows in principle); on
-Apple platforms it links the system's JavaScriptCore for the second engine.
-The package needs no Flutter. The native tests need Node.js and `clang++`;
+architecture (iOS, Android, macOS; Linux and Windows in principle). The
+package needs no Flutter. The native tests need Node.js and `clang++`;
 their RealtimeSanitizer build needs a clang that has it, e.g. LLVM from
 Homebrew on macOS (`brew install llvm`), and is skipped without one.
 
@@ -199,15 +198,13 @@ before the first tick whose request came after the load - the L blocks
 requested before it still tick the old script; a failed load keeps the old
 context and ends the engine's load with the error.
 
-### The engines
+### The engine
 
-QuickJS-ng 0.17.0 (MIT) is bundled and runs on every platform: a runtime
-per context with a memory limit (`memory_limit`, 32 MB) and an interrupt
-handler that stops a tick after `tick_budget` (100 ms); an aborted tick
-drops its values. On Apple platforms the string setting `engine` selects
-the system's JavaScriptCore through its public C API instead, for
-comparisons and as a fallback: it has neither a memory limit nor a time
-budget - a runaway script blocks the worker - and does not tell its memory.
+QuickJS-ng 0.17.0 (MIT) is bundled and runs the scripts on every
+platform: a runtime per context with a memory limit (`memory_limit`,
+32 MB) and an interrupt handler that stops a tick after `tick_budget`
+(100 ms); an aborted tick drops its values. It sits behind a thin engine
+interface inside the package, which is not public.
 
 The worker has a stack of 4 MB and is created on the control thread. On
 Android it binds itself to the fast cores - the cores above the slowest
@@ -224,10 +221,6 @@ of service class user-interactive. The statistics tell where it runs.
   graph drops and counts them.
 - A context keeps at most 1024 (output, id) pairs; a send to one more
   throws a RangeError.
-- JavaScriptCore has neither a memory limit nor a time budget: a runaway
-  script blocks the worker, an offline block stops waiting for it after
-  the tick budget plus 11 seconds, and the node waits for the running
-  tick when it is destroyed. Its memory is reported as 0.
 - The memory of a QuickJS-ng context is the count of its allocator: the
   bytes of the system's allocator it holds, by their usable size.
 
@@ -236,10 +229,9 @@ of service class user-interactive. The statistics tell where it runs.
 - `AudAudioScript`: `name` and `register` for the package list of an
   engine, `registerWith` for the host api of a graph.
 - `AudScriptModulator`: the type id, the event ids, the string settings
-  (`script`, `script_name`, `engine`), the parameters (`mode0` to
-  `mode15`, `memory_limit`, `tick_budget`, `lookahead`) with their
-  descriptors,
-  `engineAvailable`, `stats()` and `resetStats()` of the process-wide
+  (`script`, `script_name`), the parameters (`mode0` to `mode15`,
+  `memory_limit`, `tick_budget`, `lookahead`) with their descriptors,
+  `stats()` and `resetStats()` of the process-wide
   `AudScriptStats` - ticks, late ticks, skipped requests, aborted ticks,
   tick times with p50 and p99, the placement of the worker, the last load
   and its memory, the last error and console lines; the engine never

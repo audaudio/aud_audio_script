@@ -12,7 +12,7 @@
 //
 // - SCRIPT_BENCH: the synthetic workload and its tenfold stress variant on
 //   the bench, paced at the block of the engine and at 48 kHz, 256 frames,
-//   on QuickJS-ng and, on Apple platforms, JavaScriptCore;
+//   on QuickJS-ng;
 // - SCRIPT_LIVE: the modulator with the synthetic workload on the running
 //   engine for AUD_MEASURE_SECONDS (default 10): its statistics.
 
@@ -36,25 +36,21 @@ void main() {
     final format = state.engine.format;
     final frames = format.bufferFrames > 0 ? format.bufferFrames : 256;
     final sampleRate = format.sampleRate > 0 ? format.sampleRate : 48000.0;
-    for (final scriptEngine in AudScriptEngine.values) {
-      if (!AudScriptModulator.engineAvailable(scriptEngine)) continue;
-      for (final (name, source) in [
-        ('synthetic', AudScriptBench.syntheticScript),
-        ('stress', AudScriptBench.syntheticStressScript),
-      ]) {
-        for (final (rate, block) in [(sampleRate, frames), (48000.0, 256)]) {
-          final result = AudScriptBench.measure(
-            source,
-            name: name,
-            engine: scriptEngine,
-            sampleRate: rate,
-            frames: block,
-            ticks: 2000,
-          );
-          print(
-            'SCRIPT_BENCH ${jsonEncode({'script': name, ...result.toJson()})}',
-          );
-        }
+    for (final (name, source) in [
+      ('synthetic', AudScriptBench.syntheticScript),
+      ('stress', AudScriptBench.syntheticStressScript),
+    ]) {
+      for (final (rate, block) in [(sampleRate, frames), (48000.0, 256)]) {
+        final result = AudScriptBench.measure(
+          source,
+          name: name,
+          sampleRate: rate,
+          frames: block,
+          ticks: 2000,
+        );
+        print(
+          'SCRIPT_BENCH ${jsonEncode({'script': name, ...result.toJson()})}',
+        );
       }
     }
     AudScriptModulator.resetStats();

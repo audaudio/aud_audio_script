@@ -75,7 +75,6 @@ void bench(AudBenchJob& job) {
   AudScriptLoad load;
   load.source = request.source;
   if (request.name != nullptr && request.name[0] != 0) load.name = request.name;
-  load.engine = request.engine;
   load.memoryLimit =
       (request.memory_limit_mb > 0 ? request.memory_limit_mb : 32) * kMegabyte;
   AudScriptLoadTimes times;
@@ -154,7 +153,6 @@ AUD_EXPORT int32_t aud_audio_script_bench_run(
     const AudScriptBenchRequest* request, AudScriptBenchResult* result) {
   using namespace aud_script;
   if (!valid(request, result)) return AUD_ERROR_INVALID_ARGUMENT;
-  if (!audScriptEngineAvailable(request->engine)) return AUD_ERROR_UNSUPPORTED;
   AudBenchJob job;
   job.request = request;
   job.result.struct_size = sizeof(AudScriptBenchResult);

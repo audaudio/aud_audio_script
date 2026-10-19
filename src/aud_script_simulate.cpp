@@ -76,7 +76,6 @@ void simulate(AudSimulationJob& job) {
   AudScriptLoad load;
   load.source = request.source;
   if (request.name != nullptr && request.name[0] != 0) load.name = request.name;
-  load.engine = request.engine;
   load.memoryLimit =
       (request.memory_limit_mb > 0 ? request.memory_limit_mb : 32) * kMegabyte;
   std::string error;
@@ -210,7 +209,6 @@ AUD_EXPORT int32_t aud_audio_script_simulate(
   if (result == nullptr) return AUD_ERROR_INVALID_ARGUMENT;
   *result = nullptr;
   if (!valid(request)) return AUD_ERROR_INVALID_ARGUMENT;
-  if (!audScriptEngineAvailable(request->engine)) return AUD_ERROR_UNSUPPORTED;
   try {
     AudSimulationJob job;
     job.request = request;

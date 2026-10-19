@@ -44,7 +44,7 @@ void main() {
       expect(AudScriptModulator.output(15), 'out15');
       expect(AudScriptModulator.maxId, 511);
       expect(AudScriptModulator.maxValues, 1024);
-      expect(AudScriptModulator.strings, ['script', 'script_name', 'engine']);
+      expect(AudScriptModulator.strings, ['script', 'script_name']);
       expect(AudScriptModulator.mode(3), 'mode3');
       expect(AudScriptModulator.params, [
         for (var i = 0; i < 16; ++i) AudScriptModulator.mode(i),
@@ -76,19 +76,6 @@ void main() {
       });
     });
 
-    group('engineAvailable(engine)', () {
-      test('tells which engines run here', () {
-        expect(
-          AudScriptModulator.engineAvailable(AudScriptEngine.quickjs),
-          isTrue,
-        );
-        expect(
-          AudScriptModulator.engineAvailable(AudScriptEngine.javascriptCore),
-          Platform.isMacOS || Platform.isIOS,
-        );
-      });
-    });
-
     group('stats()', () {
       test('counts the ticks of the modulators of the process', () {
         final load = render(
@@ -105,7 +92,6 @@ void main() {
         expect(stats.lookahead, 2);
         expect(stats.loads, 1);
         expect(stats.failedLoads, 0);
-        expect(stats.engine, AudScriptEngine.quickjs);
         expect(stats.tickTimeSumUs, greaterThan(0));
         expect(stats.tickTimeMeanUs, greaterThan(0));
         expect(stats.tickTimeP50Us, greaterThan(0));

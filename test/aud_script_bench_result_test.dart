@@ -9,7 +9,6 @@ import 'package:test/test.dart';
 
 void main() {
   const result = AudScriptBenchResult(
-    engine: AudScriptEngine.quickjs,
     sampleRate: 48000,
     frames: 256,
     ticks: 1000,
@@ -37,7 +36,6 @@ void main() {
     group('toJson()', () {
       test('writes every field', () {
         expect(result.toJson(), {
-          'engine': 'quickjs',
           'sampleRate': 48000.0,
           'frames': 256,
           'ticks': 1000,
@@ -64,7 +62,7 @@ void main() {
       test('sums up the measurement', () {
         expect(
           result.toString(),
-          'quickjs: mean 20.0 µs, p50 18.0 µs, p99 53.3 µs, max 90.0 µs per '
+          'mean 20.0 µs, p50 18.0 µs, p99 53.3 µs, max 90.0 µs per '
           'tick of a block of 5333.3 µs (256 frames at 48000 Hz); 1 over the '
           'block, 2 aborted; context 250.0 µs, load 700.0 µs, 300000 bytes; '
           'qos',

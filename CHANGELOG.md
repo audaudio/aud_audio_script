@@ -27,8 +27,21 @@
 - Add a lookahead of the worker of the modulator
 
 - Add the parameter lookahead (1 to 4 blocks, default 2): block n requests block n + lookahead, so back-to-back callbacks find their values
+
 - Run pending requests in order, each once; skip to the newest only when more than lookahead requests wait
+
 - Keep the results in a FIFO: a block takes its own, a late block the newest older one, later ones wait
+
 - Request blocks 1 to lookahead at the first block; a change of the lookahead leaves no block without its tick
+
 - Add the lookahead to the simulation and to the statistics
+
 - Test back-to-back callbacks (late at 1, on time at 2) and the equality with the simulation at lookahead 1 and 2
+
+- Add QuickJS-ng as the sole engine, drop JavaScriptCore
+
+- Remove the JavaScriptCore adapter and its framework link
+- Remove the engine choice: the setting engine, aud_audio_script_engine_available, AUD_SCRIPT_ENGINE_*, the engine fields of the stats, the simulation and the bench
+- Remove AudScriptEngine, AudScriptModulator.engine and engineAvailable, the engine of AudScriptStats, AudScriptBenchResult, simulate and measure
+- Keep the internal engine interface with QuickJS-ng as its only implementation
+- Drop the JavaScriptCore tests and caveats from the tests and the docs

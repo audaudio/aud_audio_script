@@ -13,7 +13,6 @@ import 'package:meta/meta.dart';
 
 import 'aud_audio_script_bindings_generated.dart' as bindings;
 import 'aud_script_bench_result.dart';
-import 'aud_script_engine.dart';
 import 'aud_script_exception.dart';
 import 'aud_script_placement.dart';
 
@@ -46,7 +45,6 @@ abstract final class AudScriptBench {
   /// Times the ticks of [source] and returns what the bench measured.
   ///
   /// - [name] the name of the script in error messages
-  /// - [engine] the JavaScript engine
   /// - [sampleRate] the sample rate in Hz, 8 to 384 kHz
   /// - [frames] the frames of a block
   /// - [tempo] the tempo of the transport in BPM, 1 to 999
@@ -58,14 +56,12 @@ abstract final class AudScriptBench {
   /// - [tickBudgetMs] the longest tick in ms
   ///
   /// Throws an [AudScriptException] with `AUD_ERROR_FAILED` and the error
-  /// of the script when it does not load, `AUD_ERROR_UNSUPPORTED` for an
-  /// engine the platform lacks and `AUD_ERROR_INVALID_ARGUMENT` for
-  /// arguments out of range.
+  /// of the script when it does not load and `AUD_ERROR_INVALID_ARGUMENT`
+  /// for arguments out of range.
   @RecordUse()
   static AudScriptBenchResult measure(
     String source, {
     String name = 'script',
-    AudScriptEngine engine = AudScriptEngine.quickjs,
     double sampleRate = 48000,
     int frames = 256,
     double tempo = 120,
@@ -79,7 +75,6 @@ abstract final class AudScriptBench {
     final result = arena<bindings.AudScriptBenchResult>();
     request.ref
       ..struct_size = sizeOf<bindings.AudScriptBenchRequest>()
-      ..engine = engine.id
       ..source = source.toNativeUtf8(allocator: arena).cast()
       ..name = name.toNativeUtf8(allocator: arena).cast()
       ..sample_rate = sampleRate
@@ -101,7 +96,6 @@ abstract final class AudScriptBench {
     }
     final r = result.ref;
     return AudScriptBenchResult(
-      engine: engine,
       sampleRate: sampleRate,
       frames: frames,
       ticks: r.ticks,
@@ -138,7 +132,7 @@ abstract final class AudScriptBench {
 // of the package's own that does what modulation scripts do - breakpoint
 // envelopes locked to the beat with eased segments, looped with phase
 // offsets, and target functions per output that combine them - so that the
-// speed of an engine can be measured in public. scripts/test-native.js
+// speed of the engine can be measured in public. scripts/test-native.js
 // reads it for the native tests; keep it the only raw string of the file.
 const String _syntheticBody = r'''
 // A synthetic modulation patch: breakpoint envelopes locked to the beat,

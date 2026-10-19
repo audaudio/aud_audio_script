@@ -1,5 +1,5 @@
 name: aud_audio_script_example
-description: "Example of aud_audio_script: a modulator runs the synthetic workload on the engine of aud_audio, on iOS and Android, with its statistics and a bench of QuickJS-ng and JavaScriptCore."
+description: "Example of aud_audio_script: a modulator runs the synthetic workload on the engine of aud_audio, on iOS and Android, with its statistics and a bench of QuickJS-ng."
 publish_to: none
 version: 1.0.0+1
 

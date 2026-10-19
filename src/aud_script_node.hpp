@@ -211,9 +211,7 @@ class AudScriptNode {
 
   // The control thread's.
   std::string source_;
-  bool hasSource_ = false;
   std::string name_ = "script";
-  uint32_t engine_ = AUD_SCRIPT_ENGINE_QUICKJS;
 
   // The worker's.
   AudScriptRunner runner_;

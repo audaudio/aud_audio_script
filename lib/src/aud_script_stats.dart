@@ -4,7 +4,6 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'aud_script_engine.dart';
 import 'aud_script_placement.dart';
 
 // #############################################################################
@@ -16,7 +15,6 @@ import 'aud_script_placement.dart';
 class AudScriptStats {
   /// Creates statistics.
   const AudScriptStats({
-    this.engine = AudScriptEngine.quickjs,
     this.ticks = 0,
     this.lateTicks = 0,
     this.skippedRequests = 0,
@@ -44,7 +42,6 @@ class AudScriptStats {
   // ...........................................................................
   /// The statistics as JSON, e.g. for the report of a measurement.
   Map<String, Object> toJson() => {
-    'engine': engine.settingValue,
     'ticks': ticks,
     'lateTicks': lateTicks,
     'skippedRequests': skippedRequests,
@@ -75,13 +72,10 @@ class AudScriptStats {
       '${tickTimeMeanUs.toStringAsFixed(1)} µs, p99 '
       '${tickTimeP99Us.toStringAsFixed(1)} µs, max '
       '${tickTimeMaxUs.toStringAsFixed(1)} µs; $lateTicks late, '
-      '$skippedRequests skipped, $abortedTicks aborted; ${engine.name} on '
+      '$skippedRequests skipped, $abortedTicks aborted; worker on '
       '${placement.name}';
 
   // ...........................................................................
-  /// The engine of the last load.
-  final AudScriptEngine engine;
-
   /// The ticks the workers ran, aborted ones included.
   final int ticks;
 
@@ -144,7 +138,7 @@ class AudScriptStats {
   final double loadUs;
 
   /// The bytes the context of the last load holds, measured after the load
-  /// and every second; 0 for JavaScriptCore.
+  /// and every second: the count of its allocator.
   final int memoryBytes;
 
   /// The last error of a load or a tick, prefixed with the script name.

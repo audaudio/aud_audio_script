@@ -87,7 +87,6 @@ const AudStringKeyDescriptor kKeys[AUD_SCRIPT_NUM_KEYS] = {
     {sizeof(AudStringKeyDescriptor), AUD_SCRIPT_KEY_SCRIPT, "script", "Script"},
     {sizeof(AudStringKeyDescriptor), AUD_SCRIPT_KEY_SCRIPT_NAME, "script_name",
      "Script name"},
-    {sizeof(AudStringKeyDescriptor), AUD_SCRIPT_KEY_ENGINE, "engine", "Engine"},
 };
 
 // ############################################################################
@@ -517,32 +516,16 @@ int32_t AudScriptNode::setString(uint32_t key, const char* value) {
   switch (key) {
     case AUD_SCRIPT_KEY_SCRIPT:
       source_ = text;
-      hasSource_ = true;
       break;
     case AUD_SCRIPT_KEY_SCRIPT_NAME:
       name_ = text.empty() ? "script" : text;
       return AUD_OK;
-    case AUD_SCRIPT_KEY_ENGINE: {
-      uint32_t engine = 0;
-      if (text == "quickjs") {
-        engine = AUD_SCRIPT_ENGINE_QUICKJS;
-      } else if (text == "javascriptcore") {
-        engine = AUD_SCRIPT_ENGINE_JAVASCRIPTCORE;
-      } else {
-        return AUD_ERROR_INVALID_ARGUMENT;
-      }
-      if (!audScriptEngineAvailable(engine)) return AUD_ERROR_UNSUPPORTED;
-      engine_ = engine;
-      if (!hasSource_) return AUD_OK;
-      break;
-    }
     default:
       return AUD_ERROR_INVALID_ARGUMENT;
   }
   AudScriptLoadCommand command;
   command.load.source = source_;
   command.load.name = name_;
-  command.load.engine = engine_;
   command.applyAfter = issued_.load(std::memory_order_acquire);
   if (host_ != nullptr && host_->begin_load != nullptr &&
       host_->end_load != nullptr) {
@@ -601,7 +584,7 @@ void AudScriptNode::takeLoads() {
     std::unique_ptr<AudScriptState> state =
         runner_.load(command.load, &times, &error);
     stats.countLoad(state != nullptr ? AUD_OK : AUD_ERROR_FAILED,
-                    times.createUs, times.loadUs, command.load.engine);
+                    times.createUs, times.loadUs);
     if (state == nullptr) {
       stats.setError(error);
       endLoad(command.id, AUD_ERROR_FAILED, error.c_str());

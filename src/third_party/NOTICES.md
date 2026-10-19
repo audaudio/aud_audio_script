@@ -37,9 +37,7 @@ Done for ticket 31 (decisions license-001 and license-002):
   generator, whose output the Unicode license allows to be used without
   restriction; `dtoa.c` is QuickJS's own implementation by Fabrice
   Bellard (MIT).
-- The node, the worker, the engine interface, the JavaScriptCore adapter,
+- The node, the worker, the engine interface with its QuickJS-ng adapter,
   the simulation, the bench and the synthetic workload are Audanika's own
-  code. MIT, as the package. The JavaScriptCore adapter uses the public C
-  API of the system's JavaScriptCore framework on Apple platforms; nothing
-  of JavaScriptCore is vendored or linked statically.
+  code. MIT, as the package.
 - No code under the LGPL or the GPL is part of the package.

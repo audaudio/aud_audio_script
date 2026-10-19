@@ -6,8 +6,7 @@ package on the engine of `aud_audio` while the transport plays at
 
 - the statistics of the modulator every second: ticks, tick times, late
   ticks, skipped requests, aborted ticks, the placement of the worker
-- the bench of the synthetic workload on QuickJS-ng and, on Apple
-  platforms, JavaScriptCore
+- the bench of the synthetic workload on QuickJS-ng
 
 ```bash
 flutter run -d <device>
@@ -17,6 +16,6 @@ flutter test integration_test/script_test.dart -d <device> \
 
 `script_test.dart` prints `SCRIPT_BENCH` - the synthetic workload and its
 tenfold stress variant on the bench, paced at the block of the device and
-at 48 kHz, 256 frames, on every engine of the platform - and `SCRIPT_LIVE`:
+at 48 kHz, 256 frames - and `SCRIPT_LIVE`:
 the statistics of the modulator after `AUD_MEASURE_SECONDS` (default 10)
 on the running engine.

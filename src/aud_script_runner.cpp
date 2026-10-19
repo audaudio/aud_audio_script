@@ -125,11 +125,10 @@ std::unique_ptr<AudScriptState> AudScriptRunner::load(const AudScriptLoad& load,
     return nullptr;
   }
   state->name = load.name;
-  state->engine = load.engine;
   state->memoryLimit = load.memoryLimit;
   const int64_t start = aud_clock_now_ns();
-  state->context = audScriptCreateContext(load.engine, load.memoryLimit,
-                                          state.get(), &message);
+  state->context =
+      audScriptCreateContext(load.memoryLimit, state.get(), &message);
   const int64_t created = aud_clock_now_ns();
   if (state->context == nullptr) {
     *error = load.name + ": " + message;

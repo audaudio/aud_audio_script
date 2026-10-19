@@ -116,10 +116,8 @@ class AudScriptGlobalStats {
   // (AUD_SCRIPT_TICK_*).
   void countTick(double us, int32_t status);
 
-  // [worker] A load that ended with `result`, its times in µs, and the
-  // engine.
-  void countLoad(int32_t result, double createUs, double loadUs,
-                 uint32_t engine);
+  // [worker] A load that ended with `result` and its times in µs.
+  void countLoad(int32_t result, double createUs, double loadUs);
 
   // [realtime] The lookahead of the block a modulator renders.
   void setLookahead(uint32_t blocks) {
@@ -160,7 +158,6 @@ class AudScriptGlobalStats {
   std::atomic<uint64_t> loads_{0};
   std::atomic<uint64_t> failedLoads_{0};
   std::atomic<uint64_t> memory_{0};
-  std::atomic<uint32_t> engine_{0};
   std::atomic<uint32_t> placementMode_{0};
   std::atomic<int32_t> priority_{0};
   std::atomic<uint64_t> cpus_{0};

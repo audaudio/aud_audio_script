@@ -9,7 +9,6 @@
 #include <cstring>
 #include <string>
 
-#include "aud_script_engine.hpp"
 #include "aud_script_node.hpp"
 #include "aud_script_stats.hpp"
 
@@ -37,10 +36,6 @@ AUD_EXPORT int32_t aud_audio_script_register(const AudHostApi* host) {
   if (host->struct_size < sizeof(AudHostApi)) return AUD_ERROR_ABI_MINOR;
   return host->register_node_type(host->host,
                                   &aud_script::audScriptModulatorDescriptor());
-}
-
-AUD_EXPORT int32_t aud_audio_script_engine_available(uint32_t engine) {
-  return aud_script::audScriptEngineAvailable(engine) ? 1 : 0;
 }
 
 AUD_EXPORT int32_t aud_audio_script_stats(AudScriptStats* stats) {

@@ -328,10 +328,9 @@ inline std::vector<Record> recordsOf(int64_t block) {
 inline AudScriptSimulation* simulate(
     const std::string& source, double rate, uint32_t frames, double tempo,
     uint32_t blocks, const std::vector<AudScriptControlChange>& events = {},
-    uint32_t engine = AUD_SCRIPT_ENGINE_QUICKJS, uint32_t lookahead = 1) {
+    uint32_t lookahead = 1) {
   AudScriptSimulationRequest request{};
   request.struct_size = sizeof(AudScriptSimulationRequest);
-  request.engine = engine;
   request.source = source.c_str();
   request.sample_rate = rate;
   request.tempo = tempo;

@@ -22,9 +22,7 @@ import 'package:native_toolchain_c/native_toolchain_c.dart';
 // hidden symbols - only the entry points of aud_audio_script.h are
 // visible, so that QuickJS-ng never clashes with another copy in the app
 // -, on Android 16 KB pages, the static C++ runtime kept inside the
-// library, unused code dropped and no undefined symbol left. On Apple
-// platforms the library links the system's JavaScriptCore for the second
-// engine.
+// library, unused code dropped and no undefined symbol left.
 void main(List<String> args) async {
   await build(args, (input, output) async {
     if (!input.config.buildCodeAssets) return;
@@ -69,9 +67,6 @@ void main(List<String> args) async {
       language: Language.cpp,
       std: 'c++17',
       cppLinkStdLib: android ? 'c++_static' : null,
-      frameworks: [
-        if (apple) ...['Foundation', 'JavaScriptCore'],
-      ],
       flags: [
         if (!windows) ...['-fvisibility=hidden', '-fvisibility-inlines-hidden'],
         if (android) ...[
@@ -129,7 +124,6 @@ const List<String> sources = [
   'src/aud_audio_script.cpp',
   'src/aud_script_bench.cpp',
   'src/aud_script_engine.cpp',
-  'src/aud_script_jsc.cpp',
   'src/aud_script_node.cpp',
   'src/aud_script_placement.cpp',
   'src/aud_script_quickjs.cpp',

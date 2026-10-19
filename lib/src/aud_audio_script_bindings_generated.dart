@@ -16,10 +16,9 @@ import 'dart:ffi' as ffi;
 
 /// [offline] Runs the bench on a worker thread of its own and waits for it;
 /// AUD_OK, AUD_ERROR_INVALID_ARGUMENT as for aud_audio_script_simulate or
-/// for no ticks, AUD_ERROR_UNSUPPORTED for an engine the platform lacks,
-/// AUD_ERROR_FAILED when the script does not load (`result->error` tells
-/// why), or AUD_ERROR_OUT_OF_MEMORY. The bench counts nothing into the
-/// statistics of the modulators.
+/// for no ticks, AUD_ERROR_FAILED when the script does not load
+/// (`result->error` tells why), or AUD_ERROR_OUT_OF_MEMORY. The bench counts
+/// nothing into the statistics of the modulators.
 @ffi.Native<
   ffi.Int32 Function(
     ffi.Pointer<AudScriptBenchRequest>,
@@ -39,11 +38,6 @@ external int aud_audio_script_console(
   int capacity,
   ffi.Pointer<ffi.Size> size,
 );
-
-/// [any thread] Whether `engine` (AUD_SCRIPT_ENGINE_*) runs on this
-/// platform: 1 or 0.
-@ffi.Native<ffi.Int32 Function(ffi.Uint32)>()
-external int aud_audio_script_engine_available(int engine);
 
 /// [any thread] The text of the last error of a load or a tick, prefixed
 /// with the script name; the last console lines, one per line, oldest
@@ -74,8 +68,7 @@ external void aud_audio_script_reset_stats();
 /// AUD_ERROR_INVALID_ARGUMENT for a missing or short struct, no source, no
 /// frames, a sample rate outside 8 to 384 kHz, a tempo outside 1 to 999
 /// BPM, more than 1000000 blocks, a lookahead above 4 or events out of
-/// range, AUD_ERROR_UNSUPPORTED for an engine the platform lacks, or
-/// AUD_ERROR_OUT_OF_MEMORY.
+/// range, or AUD_ERROR_OUT_OF_MEMORY.
 @ffi.Native<
   ffi.Int32 Function(
     ffi.Pointer<AudScriptSimulationRequest>,
@@ -102,12 +95,6 @@ const int AUD_SCRIPT_BENCH_ERROR_BYTES = 512;
 
 const int AUD_SCRIPT_BENCH_UNPACED = 1;
 
-const int AUD_SCRIPT_ENGINE_JAVASCRIPTCORE = 1;
-
-const int AUD_SCRIPT_ENGINE_QUICKJS = 0;
-
-const int AUD_SCRIPT_KEY_ENGINE = 2;
-
 const int AUD_SCRIPT_KEY_SCRIPT = 0;
 
 const int AUD_SCRIPT_KEY_SCRIPT_NAME = 1;
@@ -122,7 +109,7 @@ const String AUD_SCRIPT_MODULATOR_TYPE_ID = 'aud.script.modulator';
 
 const int AUD_SCRIPT_NUM_IDS = 512;
 
-const int AUD_SCRIPT_NUM_KEYS = 3;
+const int AUD_SCRIPT_NUM_KEYS = 2;
 
 const int AUD_SCRIPT_NUM_OUTPUTS = 16;
 
@@ -160,9 +147,9 @@ final class AudScriptBenchRequest extends ffi.Struct {
   @ffi.Uint32()
   external int struct_size;
 
-  /// AUD_SCRIPT_ENGINE_*
+  /// AUD_SCRIPT_BENCH_*
   @ffi.Uint32()
-  external int engine;
+  external int flags;
 
   external ffi.Pointer<ffi.Char> source;
 
@@ -184,10 +171,6 @@ final class AudScriptBenchRequest extends ffi.Struct {
   @ffi.Uint32()
   external int warmup_ticks;
 
-  /// AUD_SCRIPT_BENCH_*
-  @ffi.Uint32()
-  external int flags;
-
   /// 0: 32
   @ffi.Uint32()
   external int memory_limit_mb;
@@ -199,7 +182,7 @@ final class AudScriptBenchRequest extends ffi.Struct {
   static ffi.Pointer<AudScriptBenchRequest> $allocate(
     ffi.Allocator $allocator, {
     required int struct_size,
-    required int engine,
+    required int flags,
     required ffi.Pointer<ffi.Char> source,
     required ffi.Pointer<ffi.Char> name,
     required double sample_rate,
@@ -207,12 +190,11 @@ final class AudScriptBenchRequest extends ffi.Struct {
     required int frames,
     required int ticks,
     required int warmup_ticks,
-    required int flags,
     required int memory_limit_mb,
     required int tick_budget_ms,
   }) => $allocator<AudScriptBenchRequest>()
     ..ref.struct_size = struct_size
-    ..ref.engine = engine
+    ..ref.flags = flags
     ..ref.source = source
     ..ref.name = name
     ..ref.sample_rate = sample_rate
@@ -220,7 +202,6 @@ final class AudScriptBenchRequest extends ffi.Struct {
     ..ref.frames = frames
     ..ref.ticks = ticks
     ..ref.warmup_ticks = warmup_ticks
-    ..ref.flags = flags
     ..ref.memory_limit_mb = memory_limit_mb
     ..ref.tick_budget_ms = tick_budget_ms;
 }
@@ -281,8 +262,7 @@ final class AudScriptBenchResult extends ffi.Struct {
   @ffi.Double()
   external double load_us;
 
-  /// The bytes the context holds after the timed ticks; 0 for
-  /// JavaScriptCore.
+  /// The bytes the context holds after the timed ticks.
   @ffi.Uint64()
   external int memory_bytes;
 
@@ -395,9 +375,9 @@ final class AudScriptSimulationRequest extends ffi.Struct {
   @ffi.Uint32()
   external int struct_size;
 
-  /// AUD_SCRIPT_ENGINE_*
+  /// 0: 1, the tick of the next block
   @ffi.Uint32()
-  external int engine;
+  external int lookahead;
 
   external ffi.Pointer<ffi.Char> source;
 
@@ -427,16 +407,15 @@ final class AudScriptSimulationRequest extends ffi.Struct {
   @ffi.Uint32()
   external int num_events;
 
-  /// 0: 1, the tick of the next block
   @ffi.Uint32()
-  external int lookahead;
+  external int reserved;
 
   external ffi.Pointer<AudScriptControlChange> events;
 
   static ffi.Pointer<AudScriptSimulationRequest> $allocate(
     ffi.Allocator $allocator, {
     required int struct_size,
-    required int engine,
+    required int lookahead,
     required ffi.Pointer<ffi.Char> source,
     required ffi.Pointer<ffi.Char> name,
     required double sample_rate,
@@ -446,11 +425,11 @@ final class AudScriptSimulationRequest extends ffi.Struct {
     required int memory_limit_mb,
     required int tick_budget_ms,
     required int num_events,
-    required int lookahead,
+    required int reserved,
     required ffi.Pointer<AudScriptControlChange> events,
   }) => $allocator<AudScriptSimulationRequest>()
     ..ref.struct_size = struct_size
-    ..ref.engine = engine
+    ..ref.lookahead = lookahead
     ..ref.source = source
     ..ref.name = name
     ..ref.sample_rate = sample_rate
@@ -460,7 +439,7 @@ final class AudScriptSimulationRequest extends ffi.Struct {
     ..ref.memory_limit_mb = memory_limit_mb
     ..ref.tick_budget_ms = tick_budget_ms
     ..ref.num_events = num_events
-    ..ref.lookahead = lookahead
+    ..ref.reserved = reserved
     ..ref.events = events;
 }
 
@@ -542,9 +521,9 @@ final class AudScriptStats extends ffi.Struct {
   @ffi.Uint32()
   external int struct_size;
 
-  /// The engine of the last load, AUD_SCRIPT_ENGINE_*.
+  /// The lookahead in blocks of the last block a modulator rendered.
   @ffi.Uint32()
-  external int engine;
+  external int lookahead;
 
   /// Ticks the workers ran, aborted ones included.
   @ffi.Uint64()
@@ -608,9 +587,8 @@ final class AudScriptStats extends ffi.Struct {
   @ffi.Uint32()
   external int qos_class;
 
-  /// The lookahead in blocks of the last block a modulator rendered.
   @ffi.Uint32()
-  external int lookahead;
+  external int reserved;
 
   /// The last load: the creation of the runtime and the context, and the
   /// evaluation of the script, in µs.
@@ -621,15 +599,14 @@ final class AudScriptStats extends ffi.Struct {
   external double load_us;
 
   /// The bytes the context of the last load holds, measured on the worker
-  /// after the load and every second; 0 for JavaScriptCore, which does not
-  /// tell.
+  /// after the load and every second: the count of its allocator.
   @ffi.Uint64()
   external int memory_bytes;
 
   static ffi.Pointer<AudScriptStats> $allocate(
     ffi.Allocator $allocator, {
     required int struct_size,
-    required int engine,
+    required int lookahead,
     required int ticks,
     required int late_ticks,
     required int skipped_requests,
@@ -646,13 +623,13 @@ final class AudScriptStats extends ffi.Struct {
     required int priority,
     required int cpus,
     required int qos_class,
-    required int lookahead,
+    required int reserved,
     required double context_create_us,
     required double load_us,
     required int memory_bytes,
   }) => $allocator<AudScriptStats>()
     ..ref.struct_size = struct_size
-    ..ref.engine = engine
+    ..ref.lookahead = lookahead
     ..ref.ticks = ticks
     ..ref.late_ticks = late_ticks
     ..ref.skipped_requests = skipped_requests
@@ -669,7 +646,7 @@ final class AudScriptStats extends ffi.Struct {
     ..ref.priority = priority
     ..ref.cpus = cpus
     ..ref.qos_class = qos_class
-    ..ref.lookahead = lookahead
+    ..ref.reserved = reserved
     ..ref.context_create_us = context_create_us
     ..ref.load_us = load_us
     ..ref.memory_bytes = memory_bytes;

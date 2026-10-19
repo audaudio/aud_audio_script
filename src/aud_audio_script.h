@@ -104,30 +104,12 @@ enum {
   // "script_name": the name of the script in error messages; default
   // "script". Applies to the next load.
   AUD_SCRIPT_KEY_SCRIPT_NAME = 1,
-  // "engine": "quickjs" (default) or "javascriptcore" (Apple platforms
-  // only); loads the current script again with the new engine.
-  AUD_SCRIPT_KEY_ENGINE = 2,
-  AUD_SCRIPT_NUM_KEYS = 3,
-};
-
-// The JavaScript engines.
-enum {
-  // QuickJS-ng, bundled, on every platform: a memory limit and a time
-  // budget per tick.
-  AUD_SCRIPT_ENGINE_QUICKJS = 0,
-  // The system's JavaScriptCore through its public C API, on Apple
-  // platforms only: no memory limit and no time budget, a runaway script
-  // blocks the worker. For comparisons and as a fallback.
-  AUD_SCRIPT_ENGINE_JAVASCRIPTCORE = 1,
+  AUD_SCRIPT_NUM_KEYS = 2,
 };
 
 // [control] Registers the node type with the host api of an engine; AUD_OK
 // or the first error code. An AudRegisterFunction.
 AUD_EXPORT int32_t aud_audio_script_register(const AudHostApi* host);
-
-// [any thread] Whether `engine` (AUD_SCRIPT_ENGINE_*) runs on this
-// platform: 1 or 0.
-AUD_EXPORT int32_t aud_audio_script_engine_available(uint32_t engine);
 
 // ............................................................................
 // The statistics of all modulators of the process
@@ -148,8 +130,8 @@ enum {
 // last aud_audio_script_reset_stats; the engine never resets them.
 typedef struct AudScriptStats {
   uint32_t struct_size;
-  // The engine of the last load, AUD_SCRIPT_ENGINE_*.
-  uint32_t engine;
+  // The lookahead in blocks of the last block a modulator rendered.
+  uint32_t lookahead;
   // Ticks the workers ran, aborted ones included.
   uint64_t ticks;
   // Blocks whose values were not there when the block rendered live.
@@ -180,15 +162,13 @@ typedef struct AudScriptStats {
   int32_t priority;
   uint64_t cpus;
   uint32_t qos_class;
-  // The lookahead in blocks of the last block a modulator rendered.
-  uint32_t lookahead;
+  uint32_t reserved;
   // The last load: the creation of the runtime and the context, and the
   // evaluation of the script, in µs.
   double context_create_us;
   double load_us;
   // The bytes the context of the last load holds, measured on the worker
-  // after the load and every second; 0 for JavaScriptCore, which does not
-  // tell.
+  // after the load and every second: the count of its allocator.
   uint64_t memory_bytes;
 } AudScriptStats;
 
@@ -230,7 +210,7 @@ typedef struct AudScriptControlChange {
 // with that lookahead; the tick of block n stays the tick of block n.
 typedef struct AudScriptSimulationRequest {
   uint32_t struct_size;
-  uint32_t engine;  // AUD_SCRIPT_ENGINE_*
+  uint32_t lookahead;  // 0: 1, the tick of the next block
   const char* source;
   const char* name;  // NULL: "script"
   double sample_rate;
@@ -240,7 +220,7 @@ typedef struct AudScriptSimulationRequest {
   uint32_t memory_limit_mb;  // 0: 32
   uint32_t tick_budget_ms;   // 0: 100
   uint32_t num_events;
-  uint32_t lookahead;  // 0: 1, the tick of the next block
+  uint32_t reserved;
   const AudScriptControlChange* events;
 } AudScriptSimulationRequest;
 
@@ -298,8 +278,7 @@ typedef struct AudScriptSimulation {
 // AUD_ERROR_INVALID_ARGUMENT for a missing or short struct, no source, no
 // frames, a sample rate outside 8 to 384 kHz, a tempo outside 1 to 999
 // BPM, more than 1000000 blocks, a lookahead above 4 or events out of
-// range, AUD_ERROR_UNSUPPORTED for an engine the platform lacks, or
-// AUD_ERROR_OUT_OF_MEMORY.
+// range, or AUD_ERROR_OUT_OF_MEMORY.
 AUD_EXPORT int32_t aud_audio_script_simulate(
     const AudScriptSimulationRequest* request, AudScriptSimulation** result);
 
@@ -323,7 +302,7 @@ enum {
 // duration, as on the worker of a node.
 typedef struct AudScriptBenchRequest {
   uint32_t struct_size;
-  uint32_t engine;  // AUD_SCRIPT_ENGINE_*
+  uint32_t flags;  // AUD_SCRIPT_BENCH_*
   const char* source;
   const char* name;  // NULL: "script"
   double sample_rate;
@@ -331,7 +310,6 @@ typedef struct AudScriptBenchRequest {
   uint32_t frames;
   uint32_t ticks;
   uint32_t warmup_ticks;
-  uint32_t flags;            // AUD_SCRIPT_BENCH_*
   uint32_t memory_limit_mb;  // 0: 32
   uint32_t tick_budget_ms;   // 0: 100
 } AudScriptBenchRequest;
@@ -363,8 +341,7 @@ typedef struct AudScriptBenchResult {
   // The creation of the context and the evaluation of the script in µs.
   double context_create_us;
   double load_us;
-  // The bytes the context holds after the timed ticks; 0 for
-  // JavaScriptCore.
+  // The bytes the context holds after the timed ticks.
   uint64_t memory_bytes;
   // The error of a load that failed, prefixed with the script name and cut
   // to fit; "" otherwise.
@@ -373,10 +350,9 @@ typedef struct AudScriptBenchResult {
 
 // [offline] Runs the bench on a worker thread of its own and waits for it;
 // AUD_OK, AUD_ERROR_INVALID_ARGUMENT as for aud_audio_script_simulate or
-// for no ticks, AUD_ERROR_UNSUPPORTED for an engine the platform lacks,
-// AUD_ERROR_FAILED when the script does not load (`result->error` tells
-// why), or AUD_ERROR_OUT_OF_MEMORY. The bench counts nothing into the
-// statistics of the modulators.
+// for no ticks, AUD_ERROR_FAILED when the script does not load
+// (`result->error` tells why), or AUD_ERROR_OUT_OF_MEMORY. The bench counts
+// nothing into the statistics of the modulators.
 AUD_EXPORT int32_t aud_audio_script_bench_run(
     const AudScriptBenchRequest* request, AudScriptBenchResult* result);
 

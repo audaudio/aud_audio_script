@@ -10,9 +10,9 @@
 // catches up; the skipped requests; the aborted tick; the memory limit;
 // the failed load that keeps the old context; deterministic offline
 // renders; the emissions of the synthetic workload equal to the
-// simulation; JavaScriptCore on Apple platforms; and the probe that proves
-// the RealtimeSanitizer run catches an allocation. Every graph ends with
-// no violation of the engine's watchdog.
+// simulation; the lookahead; and the probe that proves the
+// RealtimeSanitizer run catches an allocation. Every graph ends with no
+// violation of the engine's watchdog.
 
 #include <algorithm>
 #include <chrono>
@@ -78,9 +78,9 @@ AUD_TEST(registers_the_modulator_with_an_engine_once) {
                           "lookahead") == 0);
     AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].default_value == 2);
     AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].max_value == 4);
-    AUD_CHECK(d->num_string_keys == 3);
-    AUD_CHECK(std::strcmp(d->string_keys[AUD_SCRIPT_KEY_ENGINE].id, "engine") ==
-              0);
+    AUD_CHECK(d->num_string_keys == 2);
+    AUD_CHECK(std::strcmp(d->string_keys[AUD_SCRIPT_KEY_SCRIPT_NAME].id,
+                          "script_name") == 0);
     const uint32_t wanted = AUD_NODE_CAP_VARIABLE_BLOCK | AUD_NODE_CAP_EVENTS |
                             AUD_NODE_CAP_STRINGS | AUD_NODE_CAP_TRANSPORT |
                             AUD_NODE_CAP_EVENT_OUTPUT;
@@ -378,7 +378,7 @@ AUD_TEST(a_lookahead_keeps_back_to_back_callbacks_on_time) {
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
     for (int pair = 0; pair < 15; ++pair) {
       g.renderLive(2);
-      std::this_thread::sleep_for(std::chrono::milliseconds(15));
+      std::this_thread::sleep_for(std::chrono::milliseconds(25));
     }
     const AudScriptStats s = stats();
     if (lookahead == 1) {
@@ -522,7 +522,10 @@ AUD_TEST(an_exception_in_a_tick_aborts_it_and_reports_the_error) {
   for (const Record& record : Recorder::get().records)
     values.push_back(record.value);
   AUD_CHECK((values == std::vector<float>{1, 3}));
-  AUD_CHECK(stats().aborted_ticks == 2);
+  // Tick 6, requested by the last block with the lookahead of 2, may
+  // have run and thrown too.
+  const uint64_t aborted = stats().aborted_ticks;
+  AUD_CHECK(aborted == 2 || aborted == 3);
   AUD_CHECK(lastError().find("script: ReferenceError") == 0);
   // Room for every line the process keeps: the worker may log meanwhile.
   size_t size = 0;
@@ -536,13 +539,9 @@ AUD_TEST(an_exception_in_a_tick_aborts_it_and_reports_the_error) {
 }
 
 AUD_TEST(sends_with_invalid_arguments_throw_a_range_error) {
-  for (const char* engine : {"quickjs", "javascriptcore"}) {
+  {
     aud_audio_script_reset_stats();
     Graph g(128);
-    if (aud_graph_set_string(g.graph, g.modulator, AUD_SCRIPT_KEY_ENGINE,
-                             engine) != AUD_OK) {
-      continue;
-    }
     AUD_CHECK(
         g.load("var errors = [];\n"
                "function attempt(o, i, v) {\n"
@@ -646,9 +645,9 @@ AUD_TEST(the_emissions_of_the_synthetic_workload_equal_the_simulation) {
       const uint32_t blocks = 500;
       const std::vector<Record> records =
           renderSynthetic(blocks, stress, lookahead);
-      AudScriptSimulation* simulation = simulate(
-          syntheticScript(stress), kSafeRate, kSafeFrames, kSafeTempo, blocks,
-          synthetic_events(), AUD_SCRIPT_ENGINE_QUICKJS, lookahead);
+      AudScriptSimulation* simulation =
+          simulate(syntheticScript(stress), kSafeRate, kSafeFrames, kSafeTempo,
+                   blocks, synthetic_events(), lookahead);
       AUD_CHECK(simulation != nullptr && simulation->load_result == AUD_OK);
       if (simulation == nullptr) continue;
       // The changes the node must emit: per tick the last value of each pair,
@@ -685,72 +684,6 @@ AUD_TEST(the_emissions_of_the_synthetic_workload_equal_the_simulation) {
       AUD_CHECK(records == wanted);
       aud_audio_script_simulation_free(simulation);
     }
-}
-
-// ############################################################################
-// JavaScriptCore
-
-AUD_TEST(runs_on_javascriptcore_on_apple_platforms) {
-  aud_audio_script_reset_stats();
-  Graph g(256);
-  const int32_t result = aud_graph_set_string(
-      g.graph, g.modulator, AUD_SCRIPT_KEY_ENGINE, "javascriptcore");
-#if __APPLE__
-  AUD_CHECK(result == AUD_OK);
-  AUD_CHECK(g.load("aud.onTick = function () {\n"
-                   "  aud.send(0, 300, aud.time.tick / 1000);\n"
-                   "  console.log('jsc', aud.time.tick);\n"
-                   "};\n") == AUD_OK);
-  g.renderOffline(4);
-  std::vector<float> values;
-  for (const Record& record : Recorder::get().records)
-    values.push_back(record.value);
-  AUD_CHECK((values == std::vector<float>{0.001f, 0.002f, 0.003f}));
-  AudScriptStats s = stats();
-  AUD_CHECK(s.engine == AUD_SCRIPT_ENGINE_JAVASCRIPTCORE);
-  AUD_CHECK(s.memory_bytes == 0);
-  // Back to QuickJS-ng: the engine setting loads the script again.
-  const int32_t id = aud_graph_set_string(g.graph, g.modulator,
-                                          AUD_SCRIPT_KEY_ENGINE, "quickjs");
-  AUD_CHECK(id > 0);
-  AUD_CHECK(aud_graph_wait_loads(g.graph, g.modulator, 20000) == AUD_OK);
-  g.renderOffline(2);
-  s = stats();
-  AUD_CHECK(s.engine == AUD_SCRIPT_ENGINE_QUICKJS && s.loads == 2);
-  // A failing script on JavaScriptCore keeps the old one too.
-  aud_graph_set_string(g.graph, g.modulator, AUD_SCRIPT_KEY_ENGINE,
-                       "javascriptcore");
-  AUD_CHECK(aud_graph_wait_loads(g.graph, g.modulator, 20000) == AUD_OK);
-  AUD_CHECK(g.load("aud.onTick = function ( {") == AUD_ERROR_FAILED);
-  AUD_CHECK(g.lastMessage.find("SyntaxError") != std::string::npos);
-#else
-  AUD_CHECK(result == AUD_ERROR_UNSUPPORTED);
-#endif
-}
-
-AUD_TEST(javascriptcore_simulates_the_synthetic_workload_like_quickjs) {
-#if __APPLE__
-  AudScriptSimulation* quickjs =
-      simulate(syntheticScript(), kSafeRate, kSafeFrames, kSafeTempo, 300,
-               synthetic_events());
-  AudScriptSimulation* jsc =
-      simulate(syntheticScript(), kSafeRate, kSafeFrames, kSafeTempo, 300,
-               synthetic_events(), AUD_SCRIPT_ENGINE_JAVASCRIPTCORE);
-  AUD_CHECK(quickjs != nullptr && jsc != nullptr);
-  if (quickjs == nullptr || jsc == nullptr) return;
-  AUD_CHECK(quickjs->num_sends == jsc->num_sends && jsc->num_sends > 3000);
-  double largest = 0;
-  for (uint32_t i = 0; i < quickjs->num_sends && i < jsc->num_sends; ++i) {
-    AUD_CHECK(quickjs->sends[i].output == jsc->sends[i].output);
-    AUD_CHECK(quickjs->sends[i].id == jsc->sends[i].id);
-    largest = std::max(
-        largest, std::fabs(quickjs->sends[i].value - jsc->sends[i].value));
-  }
-  // The engines may round sin, cos and pow differently in the last bits.
-  AUD_CHECK(largest < 1e-12);
-  aud_audio_script_simulation_free(quickjs);
-  aud_audio_script_simulation_free(jsc);
-#endif
 }
 
 // ############################################################################

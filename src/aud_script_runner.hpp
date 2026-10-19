@@ -120,7 +120,6 @@ class AudScriptState final : public AudScriptSink {
   std::unique_ptr<AudScriptContext> context;
   AudScriptValues values;
   std::string name;
-  uint32_t engine = AUD_SCRIPT_ENGINE_QUICKJS;
   size_t memoryLimit = 0;
   // The sends of the load, which become the values the context starts
   // with; the simulation reports them with the first tick.
@@ -138,7 +137,6 @@ class AudScriptState final : public AudScriptSink {
 struct AudScriptLoad {
   std::string source;
   std::string name = "script";
-  uint32_t engine = AUD_SCRIPT_ENGINE_QUICKJS;
   size_t memoryLimit = 32u * 1024u * 1024u;
 };
 

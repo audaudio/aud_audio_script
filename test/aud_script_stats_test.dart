@@ -9,7 +9,6 @@ import 'package:test/test.dart';
 
 void main() {
   const stats = AudScriptStats(
-    engine: AudScriptEngine.javascriptCore,
     ticks: 1000,
     lateTicks: 2,
     skippedRequests: 1,
@@ -38,7 +37,6 @@ void main() {
     test('starts at zero', () {
       const empty = AudScriptStats();
       expect(empty.ticks, 0);
-      expect(empty.engine, AudScriptEngine.quickjs);
       expect(empty.placement, AudScriptPlacement.system);
       expect(empty.console, isEmpty);
       expect(empty.lookahead, 0);
@@ -47,7 +45,6 @@ void main() {
     group('toJson()', () {
       test('writes every field', () {
         expect(stats.toJson(), {
-          'engine': 'javascriptcore',
           'ticks': 1000,
           'lateTicks': 2,
           'skippedRequests': 1,
@@ -79,7 +76,7 @@ void main() {
         expect(
           stats.toString(),
           'aud.script.modulator: 1000 ticks, mean 12.0 µs, p99 40.0 µs, max '
-          '80.0 µs; 2 late, 1 skipped, 3 aborted; javascriptCore on fastCores',
+          '80.0 µs; 2 late, 1 skipped, 3 aborted; worker on fastCores',
         );
       });
     });

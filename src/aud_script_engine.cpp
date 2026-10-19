@@ -12,28 +12,10 @@
 
 namespace aud_script {
 
-std::unique_ptr<AudScriptContext> audScriptCreateContext(uint32_t engine,
-                                                         size_t memoryLimit,
+std::unique_ptr<AudScriptContext> audScriptCreateContext(size_t memoryLimit,
                                                          AudScriptSink* sink,
                                                          std::string* error) {
-  switch (engine) {
-    case AUD_SCRIPT_ENGINE_QUICKJS:
-      return audScriptCreateQuickJs(memoryLimit, sink, error);
-    case AUD_SCRIPT_ENGINE_JAVASCRIPTCORE:
-      return audScriptCreateJavaScriptCore(sink, error);
-    default:
-      if (error != nullptr) *error = "unknown engine";
-      return nullptr;
-  }
-}
-
-bool audScriptEngineAvailable(uint32_t engine) {
-  if (engine == AUD_SCRIPT_ENGINE_QUICKJS) return true;
-#if __APPLE__
-  return engine == AUD_SCRIPT_ENGINE_JAVASCRIPTCORE;
-#else
-  return false;
-#endif
+  return audScriptCreateQuickJs(memoryLimit, sink, error);
 }
 
 const char* audScriptCheckSend(double output, double id, double value) {

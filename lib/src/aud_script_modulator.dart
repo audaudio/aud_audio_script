@@ -11,7 +11,6 @@ import 'package:ffi/ffi.dart';
 import 'package:meta/meta.dart';
 
 import 'aud_audio_script_bindings_generated.dart' as bindings;
-import 'aud_script_engine.dart';
 import 'aud_script_mode.dart';
 import 'aud_script_placement.dart';
 import 'aud_script_stats.dart';
@@ -75,12 +74,8 @@ abstract final class AudScriptModulator {
   /// to the next load.
   static const String scriptName = 'script_name';
 
-  /// The engine, an [AudScriptEngine.settingValue]; loads the current
-  /// script again.
-  static const String engine = 'engine';
-
   /// The string ids in the order of their keys.
-  static const List<String> strings = [script, scriptName, engine];
+  static const List<String> strings = [script, scriptName];
 
   // ...........................................................................
   // Parameters
@@ -174,11 +169,6 @@ abstract final class AudScriptModulator {
   // ...........................................................................
   // Native
 
-  /// Whether [engine] runs on this platform.
-  @RecordUse()
-  static bool engineAvailable(AudScriptEngine engine) =>
-      bindings.aud_audio_script_engine_available(engine.id) != 0;
-
   /// The statistics of all modulators of the process, with the last error
   /// and the last console lines; the engine never resets them.
   @RecordUse()
@@ -188,7 +178,6 @@ abstract final class AudScriptModulator {
     bindings.aud_audio_script_stats(stats);
     final s = stats.ref;
     return AudScriptStats(
-      engine: AudScriptEngine.fromId(s.engine),
       ticks: s.ticks,
       lateTicks: s.late_ticks,
       skippedRequests: s.skipped_requests,
