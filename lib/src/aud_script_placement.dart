@@ -18,7 +18,10 @@ enum AudScriptPlacement {
   qos(2),
 
   /// The system refused the binding to the fast cores.
-  refused(3);
+  refused(3),
+
+  /// Android and Linux: any core, as `AudScriptWorkerCores.any` asks.
+  anyCore(4);
 
   /// Creates a placement with its native [id].
   const AudScriptPlacement(this.id);

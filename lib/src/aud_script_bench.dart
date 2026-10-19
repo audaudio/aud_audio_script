@@ -15,6 +15,7 @@ import 'aud_audio_script_bindings_generated.dart' as bindings;
 import 'aud_script_bench_result.dart';
 import 'aud_script_exception.dart';
 import 'aud_script_placement.dart';
+import 'aud_script_worker_cores.dart';
 
 // #############################################################################
 /// The speed of a script (ticket 31, scope 3): loads it into a context on a
@@ -52,6 +53,7 @@ abstract final class AudScriptBench {
   /// - [warmupTicks] the ticks before them
   /// - [paced] whether a tick starts every block duration; false runs them
   ///   back to back
+  /// - [workerCores] the cores of the bench's worker, as a modulator's
   /// - [memoryLimitMb] the heap of the context in MB
   /// - [tickBudgetMs] the longest tick in ms
   ///
@@ -68,6 +70,7 @@ abstract final class AudScriptBench {
     int ticks = 1000,
     int warmupTicks = 50,
     bool paced = true,
+    AudScriptWorkerCores workerCores = AudScriptWorkerCores.any,
     int memoryLimitMb = 32,
     int tickBudgetMs = 100,
   }) => using((arena) {
@@ -82,7 +85,11 @@ abstract final class AudScriptBench {
       ..frames = frames
       ..ticks = ticks
       ..warmup_ticks = warmupTicks
-      ..flags = paced ? 0 : bindings.AUD_SCRIPT_BENCH_UNPACED
+      ..flags =
+          (paced ? 0 : bindings.AUD_SCRIPT_BENCH_UNPACED) |
+          (workerCores == AudScriptWorkerCores.fast
+              ? bindings.AUD_SCRIPT_BENCH_FAST_CORES
+              : 0)
       ..memory_limit_mb = memoryLimitMb
       ..tick_budget_ms = tickBudgetMs;
     result.ref.struct_size = sizeOf<bindings.AudScriptBenchResult>();
@@ -113,6 +120,7 @@ abstract final class AudScriptBench {
       priority: r.priority,
       cpus: r.cpus,
       qosClass: r.qos_class,
+      lastCpu: r.last_cpu,
     );
   });
 

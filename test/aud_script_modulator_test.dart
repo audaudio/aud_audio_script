@@ -51,6 +51,7 @@ void main() {
         AudScriptModulator.memoryLimit,
         AudScriptModulator.tickBudget,
         AudScriptModulator.lookahead,
+        AudScriptModulator.workerCores,
       ]);
     });
 
@@ -71,6 +72,7 @@ void main() {
             ('memory_limit', 1, 1024, 32),
             ('tick_budget', 1, 10000, 100),
             ('lookahead', 1, 4, 2),
+            ('worker_cores', 0, 1, 0),
           ],
         );
       });
@@ -90,6 +92,7 @@ void main() {
         expect(stats.lateTicks, 0);
         expect(stats.abortedTicks, 0);
         expect(stats.lookahead, 2);
+        expect(stats.workerCores, AudScriptWorkerCores.any);
         expect(stats.loads, 1);
         expect(stats.failedLoads, 0);
         expect(stats.tickTimeSumUs, greaterThan(0));
@@ -104,6 +107,7 @@ void main() {
         expect(stats.lastError, isEmpty);
         if (Platform.isMacOS) {
           expect(stats.placement, AudScriptPlacement.qos);
+          expect(stats.lastCpu, greaterThanOrEqualTo(0));
           expect(stats.qosClass, isPositive);
         }
       });

@@ -129,8 +129,13 @@ class AudScriptGlobalStats {
     memory_.store(bytes, std::memory_order_relaxed);
   }
 
-  // [worker] The placement of a worker that started.
+  // [worker] The placement of a worker that placed itself.
   void setPlacement(const AudScriptPlacement& placement);
+
+  // [worker] The core a worker ran its last tick on.
+  void setLastCpu(int32_t cpu) {
+    lastCpu_.store(cpu, std::memory_order_relaxed);
+  }
 
   // [worker, control] The last error, the console lines.
   void setError(const std::string& text);
@@ -163,6 +168,8 @@ class AudScriptGlobalStats {
   std::atomic<uint64_t> cpus_{0};
   std::atomic<uint32_t> qos_{0};
   std::atomic<uint32_t> lookahead_{0};
+  std::atomic<int32_t> lastCpu_{-1};
+  std::atomic<uint32_t> workerCores_{0};
   AudScriptHistogram histogram_;
   // The sum and the longest of the tick times, the times of the last load:
   // written by the workers under the mutex, read under it.

@@ -178,6 +178,8 @@ class AudScriptNode {
   // Runs the tick of a request with the inputs that came before it.
   void runRequest(const AudScriptEntry& request);
   void publish(uint64_t tick, uint32_t offset);
+  // Places the worker as "worker_cores" asks, when it changed.
+  void place();
   void measureMemory(bool force);
 
   const AudHostApi* host_;
@@ -220,6 +222,7 @@ class AudScriptNode {
   std::vector<AudScriptInput> inputs_;
   std::vector<AudScriptEntry> batch_;
   AudScriptPlacement placement_;
+  bool placed_ = false;
   int64_t measuredNs_ = 0;
 
   AudScriptThread worker_;

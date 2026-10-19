@@ -207,10 +207,20 @@ platform: a runtime per context with a memory limit (`memory_limit`,
 interface inside the package, which is not public.
 
 The worker has a stack of 4 MB and is created on the control thread. On
-Android it binds itself to the fast cores - the cores above the slowest
-clock, as the audio thread of `aud_audio_io` does - and asks for the nice
-values -19, -16 and -10 in turn; on Apple platforms it runs at the quality
-of service class user-interactive. The statistics tell where it runs.
+Android and Linux it asks for the nice values -19, -16 and -10 in turn,
+and the parameter `worker_cores` says where it runs: on any core (0, the
+default) or bound to the fast cores, the cores above the slowest clock
+(1). Any core is the default because of what binding did on a big.LITTLE
+tablet: the audio thread wakes the worker, and the scheduler puts a woken
+thread on the waker's core (wake-affine); with the idle big cores isolated
+by the vendor's core control, the bound worker had no other fast core to
+go to and waited there for the realtime audio thread - for several blocks
+when callbacks came back to back, so ticks were late although a tick took
+a thirtieth of a block. The worker places itself anew at its next wake-up
+after a change. On Apple platforms it runs at the quality of service class
+user-interactive either way. The statistics tell where it runs, the
+priority that held, the `worker_cores` it placed itself for and the core
+it ran its last tick on.
 
 ### Limits
 
@@ -230,7 +240,8 @@ of service class user-interactive. The statistics tell where it runs.
   engine, `registerWith` for the host api of a graph.
 - `AudScriptModulator`: the type id, the event ids, the string settings
   (`script`, `script_name`), the parameters (`mode0` to `mode15`,
-  `memory_limit`, `tick_budget`, `lookahead`) with their descriptors,
+  `memory_limit`, `tick_budget`, `lookahead`, `worker_cores` with
+  `AudScriptWorkerCores`) with their descriptors,
   `stats()` and `resetStats()` of the process-wide
   `AudScriptStats` - ticks, late ticks, skipped requests, aborted ticks,
   tick times with p50 and p99, the placement of the worker, the last load

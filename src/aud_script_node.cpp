@@ -59,6 +59,8 @@ const AudParamDescriptor kParams[AUD_SCRIPT_NUM_PARAMS] = {
      10000.0f, 100.0f, kStepped, 10000, 0},
     {sizeof(AudParamDescriptor), "lookahead", "Lookahead", "blocks", 1.0f, 4.0f,
      2.0f, kStepped, 4, 0},
+    {sizeof(AudParamDescriptor), "worker_cores", "Worker cores", "", 0.0f, 1.0f,
+     0.0f, kStepped, 2, 0},
 };
 
 #undef AUD_SCRIPT_MODE
@@ -653,18 +655,31 @@ void AudScriptNode::runRequest(const AudScriptEntry& request) {
   inputs_.clear();
   publish(request.tick, result.grid.offset);
   if (result.ran) {
-    AudScriptGlobalStats::get().countTick(result.timeUs, result.status);
+    AudScriptGlobalStats& stats = AudScriptGlobalStats::get();
+    stats.countTick(result.timeUs, result.status);
+    stats.setLastCpu(audScriptCurrentCpu());
   }
 }
 
+void AudScriptNode::place() {
+  const bool fast = params_[AUD_SCRIPT_PARAM_WORKER_CORES].load(
+                        std::memory_order_relaxed) >= 0.5f;
+  if (placed_ && fast == placement_.fastCores) return;
+  placement_ = audScriptPlaceCurrentThread(fast);
+  placed_ = true;
+  AudScriptGlobalStats::get().setPlacement(placement_);
+}
+
 void AudScriptNode::workerMain() {
-  placement_ = audScriptPlaceCurrentThread();
+  place();
   AudScriptGlobalStats& stats = AudScriptGlobalStats::get();
-  stats.setPlacement(placement_);
   measuredNs_ = aud_clock_now_ns();
   while (!stop_.load(std::memory_order_acquire)) {
     wake_.waitFor(kMeasureIntervalNs);
     if (stop_.load(std::memory_order_acquire)) break;
+    // A new value of "worker_cores" applies here, never on the audio
+    // thread.
+    place();
     batch_.clear();
     AudScriptEntry entry;
     size_t requests = 0;

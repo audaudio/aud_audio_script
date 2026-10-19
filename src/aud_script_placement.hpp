@@ -21,6 +21,8 @@ namespace aud_script {
 
 // Where the calling thread runs after audScriptPlaceCurrentThread().
 struct AudScriptPlacement {
+  // Whether the thread asked for the fast cores, AUD_SCRIPT_CORES_FAST.
+  bool fastCores = false;
   // AUD_SCRIPT_PLACEMENT_*.
   uint32_t mode = 0;
   // The nice value that held: -19, -16 or -10, or 0 when none did
@@ -43,8 +45,15 @@ uint64_t audScriptFastCoresOf(const std::vector<long>& maxClocksKhz);
 // audio priority of Android, its audio priority, then a display priority.
 constexpr int32_t kScriptNiceValues[] = {-19, -16, -10};
 
-// [worker] Places the calling thread and tells where it runs.
-AudScriptPlacement audScriptPlaceCurrentThread();
+// [worker] Places the calling thread and tells where it runs: on Android
+// and Linux bound to the fast cores with `fastCores`, else free on any core
+// - an earlier binding is lifted -, both with the raised priority; on Apple
+// platforms the quality of service class user-interactive either way.
+AudScriptPlacement audScriptPlaceCurrentThread(bool fastCores);
+
+// [worker] The core the calling thread runs on, -1 when the platform does
+// not tell; cheap enough to ask after every tick.
+int32_t audScriptCurrentCpu();
 
 // [worker] Binds the calling thread to its fast cores again when the
 // system reset its affinity: Android does that when it moves the app

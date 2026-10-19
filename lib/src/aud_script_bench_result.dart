@@ -31,6 +31,7 @@ class AudScriptBenchResult {
     this.priority = 0,
     this.cpus = 0,
     this.qosClass = 0,
+    this.lastCpu = -1,
   });
 
   // ...........................................................................
@@ -54,6 +55,7 @@ class AudScriptBenchResult {
     'priority': priority,
     'cpus': cpus,
     'qosClass': qosClass,
+    'lastCpu': lastCpu,
   };
 
   @override
@@ -116,6 +118,10 @@ class AudScriptBenchResult {
 
   /// The quality of service class on Apple platforms.
   final int qosClass;
+
+  /// The core the worker ran its last tick on; -1 when the platform does
+  /// not tell.
+  final int lastCpu;
 
   // ...........................................................................
   /// [p99Us] as a share of [blockUs]: 0.1 takes a tenth of the block.

@@ -193,18 +193,32 @@ AUD_TEST(finds_the_fast_cores_of_a_device) {
 }
 
 AUD_TEST(places_a_worker_and_keeps_it_there) {
-  AudScriptPlacement placement;
-  std::thread thread([&placement] {
-    placement = audScriptPlaceCurrentThread();
-    AUD_CHECK(audScriptRefreshPlacement(placement));
-  });
-  thread.join();
+  for (const bool fast : {false, true}) {
+    AudScriptPlacement placement;
+    int32_t cpu = -2;
+    std::thread thread([&placement, &cpu, fast] {
+      placement = audScriptPlaceCurrentThread(fast);
+      AUD_CHECK(audScriptRefreshPlacement(placement));
+      cpu = audScriptCurrentCpu();
+    });
+    thread.join();
+    AUD_CHECK(placement.fastCores == fast);
 #if __APPLE__
-  AUD_CHECK(placement.mode == AUD_SCRIPT_PLACEMENT_QOS);
-  AUD_CHECK(placement.qos == QOS_CLASS_USER_INTERACTIVE);
+    // Apple platforms keep the quality of service class either way.
+    AUD_CHECK(placement.mode == AUD_SCRIPT_PLACEMENT_QOS);
+    AUD_CHECK(placement.qos == QOS_CLASS_USER_INTERACTIVE);
+    AUD_CHECK(placement.cpus == 0);
 #else
-  AUD_CHECK(placement.mode != AUD_SCRIPT_PLACEMENT_QOS);
+    if (!fast) {
+      AUD_CHECK(placement.mode == AUD_SCRIPT_PLACEMENT_ANY_CORE);
+      AUD_CHECK(placement.cpus == 0);
+    } else {
+      AUD_CHECK(placement.mode != AUD_SCRIPT_PLACEMENT_ANY_CORE &&
+                placement.mode != AUD_SCRIPT_PLACEMENT_QOS);
+    }
 #endif
+    AUD_CHECK(cpu >= -1);
+  }
 }
 
 // ############################################################################

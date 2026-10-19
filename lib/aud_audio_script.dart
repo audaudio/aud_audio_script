@@ -25,3 +25,4 @@ export 'src/aud_script_send.dart';
 export 'src/aud_script_simulation.dart';
 export 'src/aud_script_stats.dart';
 export 'src/aud_script_tick.dart';
+export 'src/aud_script_worker_cores.dart';

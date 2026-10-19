@@ -219,11 +219,22 @@ Werte. Es sitzt hinter einer dünnen Engine-Schnittstelle im Paket, die
 nicht öffentlich ist.
 
 Der Worker hat einen Stack von 4 MB und wird auf dem Control-Thread
-erzeugt. Auf Android bindet er sich an die schnellen Kerne - die Kerne
-über dem langsamsten Takt, wie der Audio-Thread von `aud_audio_io` - und
-fragt nacheinander nach den Nice-Werten -19, -16 und -10; auf
-Apple-Plattformen läuft er in der Quality-of-Service-Klasse
-user-interactive. Die Statistiken sagen, wo er läuft.
+erzeugt. Auf Android und Linux fragt er nacheinander nach den Nice-Werten
+-19, -16 und -10, und der Parameter `worker_cores` sagt, wo er läuft: auf
+jedem Kern (0, Standard) oder gebunden an die schnellen Kerne, die Kerne
+über dem langsamsten Takt (1). Jeder Kern ist der Standard wegen dessen,
+was das Binden auf einem big.LITTLE-Tablet bewirkte: Der Audio-Thread
+weckt den Worker, und der Scheduler legt einen geweckten Thread auf den
+Kern des Weckenden (wake-affine); da der Core-Control des Herstellers die
+ruhenden großen Kerne isoliert, hatte der gebundene Worker keinen anderen
+schnellen Kern und wartete dort auf den Echtzeit-Audio-Thread - bei
+direkt aufeinanderfolgenden Callbacks mehrere Blöcke lang, sodass Ticks zu
+spät kamen, obwohl ein Tick ein Dreißigstel eines Blocks brauchte. Nach
+einer Änderung platziert sich der Worker beim nächsten Aufwachen neu. Auf
+Apple-Plattformen läuft er in jedem Fall in der Quality-of-Service-Klasse
+user-interactive. Die Statistiken sagen, wo er läuft, welche Priorität
+gilt, für welches `worker_cores` er sich platziert hat und auf welchem
+Kern er seinen letzten Tick rechnete.
 
 ### Grenzen
 
@@ -244,7 +255,8 @@ user-interactive. Die Statistiken sagen, wo er läuft.
   `registerWith` für die Host-API eines Graphen.
 - `AudScriptModulator`: die Typ-Id, die Event-Ids, die String-Einstellungen
   (`script`, `script_name`), die Parameter (`mode0` bis `mode15`,
-  `memory_limit`, `tick_budget`, `lookahead`) mit ihren Deskriptoren,
+  `memory_limit`, `tick_budget`, `lookahead`, `worker_cores` mit
+  `AudScriptWorkerCores`) mit ihren Deskriptoren,
   `stats()` und `resetStats()` der prozessweiten
   `AudScriptStats` - Ticks, späte Ticks, übersprungene Anfragen,
   abgebrochene Ticks, Tick-Zeiten mit p50 und p99, die Platzierung des

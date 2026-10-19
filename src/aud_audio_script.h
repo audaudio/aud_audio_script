@@ -82,7 +82,24 @@ enum {
   // blocks up to it at once, a smaller one requests nothing until the
   // blocks catch up: no block loses its tick when it changes.
   AUD_SCRIPT_PARAM_LOOKAHEAD = 18,
-  AUD_SCRIPT_NUM_PARAMS = 19,
+  // "worker_cores": the cores the worker may run on, AUD_SCRIPT_CORES_ANY
+  // (default) or AUD_SCRIPT_CORES_FAST; Android and Linux only, Apple
+  // platforms keep the quality of service class user-interactive. The
+  // worker places itself anew at its next wake-up.
+  AUD_SCRIPT_PARAM_WORKER_CORES = 19,
+  AUD_SCRIPT_NUM_PARAMS = 20,
+};
+
+// The cores of the worker, the values of "worker_cores".
+enum {
+  // Any core, where the system puts it, with the raised priority. On a
+  // big.LITTLE device whose idle big cores the kernel isolates, the audio
+  // thread wakes the worker onto its own core (wake-affine); bound to the
+  // fast cores the worker then waits there for the realtime audio thread,
+  // for several blocks when callbacks come back to back.
+  AUD_SCRIPT_CORES_ANY = 0,
+  // Bound to the fast cores, with the raised priority.
+  AUD_SCRIPT_CORES_FAST = 1,
 };
 
 // How the values of an output enter the block.
@@ -124,6 +141,8 @@ enum {
   AUD_SCRIPT_PLACEMENT_QOS = 2,
   // The system refused the binding; the worker runs where it is put.
   AUD_SCRIPT_PLACEMENT_REFUSED = 3,
+  // Android and Linux: any core, as "worker_cores" asks.
+  AUD_SCRIPT_PLACEMENT_ANY_CORE = 4,
 };
 
 // The statistics of all modulators of the process since its start or the
@@ -154,15 +173,17 @@ typedef struct AudScriptStats {
   double tick_time_mean_us;
   double tick_time_p50_us;
   double tick_time_p99_us;
-  // The placement of the last worker that started, AUD_SCRIPT_PLACEMENT_*;
-  // the cores it is bound to, a bit per core; the nice value that held
-  // (Android, Linux: -19, -16, -10 or 0); the quality of service class
-  // (Apple platforms, the QOS_CLASS_* value; 0 elsewhere).
+  // The placement of the worker that placed itself last,
+  // AUD_SCRIPT_PLACEMENT_*; the cores it is bound to, a bit per core; the
+  // nice value that held (Android, Linux: -19, -16, -10 or 0); the quality
+  // of service class (Apple platforms, the QOS_CLASS_* value; 0
+  // elsewhere); the core a worker ran its last tick on, -1 when the
+  // platform does not tell.
   uint32_t placement;
   int32_t priority;
   uint64_t cpus;
   uint32_t qos_class;
-  uint32_t reserved;
+  int32_t last_cpu;
   // The last load: the creation of the runtime and the context, and the
   // evaluation of the script, in µs.
   double context_create_us;
@@ -170,6 +191,10 @@ typedef struct AudScriptStats {
   // The bytes the context of the last load holds, measured on the worker
   // after the load and every second: the count of its allocator.
   uint64_t memory_bytes;
+  // The "worker_cores" the worker that placed itself last placed itself
+  // for, AUD_SCRIPT_CORES_*.
+  uint32_t worker_cores;
+  uint32_t reserved;
 } AudScriptStats;
 
 // [any thread] Reads the statistics; AUD_OK or AUD_ERROR_INVALID_ARGUMENT
@@ -292,6 +317,9 @@ AUD_EXPORT void aud_audio_script_simulation_free(AudScriptSimulation* result);
 enum {
   // Runs the ticks back to back instead of one per block duration.
   AUD_SCRIPT_BENCH_UNPACED = 1 << 0,
+  // Binds the worker to the fast cores, as AUD_SCRIPT_CORES_FAST; without
+  // it the worker runs on any core.
+  AUD_SCRIPT_BENCH_FAST_CORES = 1 << 1,
 };
 
 // What aud_audio_script_bench_run measures: `source` loaded into a context
@@ -330,7 +358,7 @@ typedef struct AudScriptBenchResult {
   int32_t priority;
   uint64_t cpus;
   uint32_t qos_class;
-  uint32_t reserved;
+  int32_t last_cpu;
   // The duration of a block in µs.
   double block_us;
   // The tick times in µs.

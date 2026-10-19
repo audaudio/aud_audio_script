@@ -41,7 +41,19 @@
 - Add QuickJS-ng as the sole engine, drop JavaScriptCore
 
 - Remove the JavaScriptCore adapter and its framework link
+
 - Remove the engine choice: the setting engine, aud_audio_script_engine_available, AUD_SCRIPT_ENGINE_*, the engine fields of the stats, the simulation and the bench
+
 - Remove AudScriptEngine, AudScriptModulator.engine and engineAvailable, the engine of AudScriptStats, AudScriptBenchResult, simulate and measure
+
 - Keep the internal engine interface with QuickJS-ng as its only implementation
+
 - Drop the JavaScriptCore tests and caveats from the tests and the docs
+
+- Add worker_cores: run the worker on any core by default
+
+- Add the parameter worker_cores: 0 any core with the raised priority (default), 1 bound to the fast cores; Apple platforms keep the QoS class
+- Place the worker anew at its next wake-up after a change, never on the audio thread
+- Report the placement anyCore, the worker_cores it holds and the core of the last tick (lastCpu) in the stats and the bench
+- Add AudScriptWorkerCores, AudScriptModulator.workerCores, AudScriptPlacement.anyCore and the bench option workerCores
+- Explain the default in the README: wake-affine wake-ups and isolated big cores starved the bound worker

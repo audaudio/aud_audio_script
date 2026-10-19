@@ -5,6 +5,7 @@
 // found in the LICENSE file in the root of this package.
 
 import 'aud_script_placement.dart';
+import 'aud_script_worker_cores.dart';
 
 // #############################################################################
 /// The statistics of all modulators of the process, as
@@ -31,6 +32,8 @@ class AudScriptStats {
     this.priority = 0,
     this.cpus = 0,
     this.qosClass = 0,
+    this.lastCpu = -1,
+    this.workerCores = AudScriptWorkerCores.any,
     this.lookahead = 0,
     this.contextCreateUs = 0,
     this.loadUs = 0,
@@ -58,6 +61,8 @@ class AudScriptStats {
     'priority': priority,
     'cpus': cpus,
     'qosClass': qosClass,
+    'lastCpu': lastCpu,
+    'workerCores': workerCores.name,
     'lookahead': lookahead,
     'contextCreateUs': contextCreateUs,
     'loadUs': loadUs,
@@ -126,6 +131,13 @@ class AudScriptStats {
 
   /// Its quality of service class on Apple platforms, `QOS_CLASS_*`.
   final int qosClass;
+
+  /// The core a worker ran its last tick on; -1 when the platform does not
+  /// tell.
+  final int lastCpu;
+
+  /// The cores the worker that placed itself last placed itself for.
+  final AudScriptWorkerCores workerCores;
 
   /// The lookahead in blocks of the last block a modulator rendered; 0
   /// before the first.

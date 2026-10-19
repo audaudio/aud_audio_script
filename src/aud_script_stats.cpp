@@ -59,6 +59,9 @@ void AudScriptGlobalStats::setPlacement(const AudScriptPlacement& placement) {
   priority_.store(placement.priority, std::memory_order_relaxed);
   cpus_.store(placement.cpus, std::memory_order_relaxed);
   qos_.store(placement.qos, std::memory_order_relaxed);
+  workerCores_.store(
+      placement.fastCores ? AUD_SCRIPT_CORES_FAST : AUD_SCRIPT_CORES_ANY,
+      std::memory_order_relaxed);
 }
 
 void AudScriptGlobalStats::setError(const std::string& text) {
@@ -88,6 +91,8 @@ void AudScriptGlobalStats::read(AudScriptStats* stats) const {
   s.priority = priority_.load(std::memory_order_relaxed);
   s.cpus = cpus_.load(std::memory_order_relaxed);
   s.qos_class = qos_.load(std::memory_order_relaxed);
+  s.last_cpu = lastCpu_.load(std::memory_order_relaxed);
+  s.worker_cores = workerCores_.load(std::memory_order_relaxed);
   s.lookahead = lookahead_.load(std::memory_order_relaxed);
   s.memory_bytes = memory_.load(std::memory_order_relaxed);
   {
@@ -128,6 +133,7 @@ void AudScriptGlobalStats::reset() {
   failedLoads_.store(0, std::memory_order_relaxed);
   memory_.store(0, std::memory_order_relaxed);
   lookahead_.store(0, std::memory_order_relaxed);
+  lastCpu_.store(-1, std::memory_order_relaxed);
   histogram_.reset();
   std::lock_guard<std::mutex> lock(mutex_);
   tickSumUs_ = 0;

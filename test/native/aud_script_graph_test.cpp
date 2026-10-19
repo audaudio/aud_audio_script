@@ -28,6 +28,10 @@
 
 #include "aud_script_fixture.hpp"
 
+#if __APPLE__
+#include <sys/qos.h>
+#endif
+
 using namespace aud_script_test;
 
 namespace {
@@ -78,6 +82,12 @@ AUD_TEST(registers_the_modulator_with_an_engine_once) {
                           "lookahead") == 0);
     AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].default_value == 2);
     AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].max_value == 4);
+    AUD_CHECK(std::strcmp(d->params[AUD_SCRIPT_PARAM_WORKER_CORES].id,
+                          "worker_cores") == 0);
+    AUD_CHECK(d->params[AUD_SCRIPT_PARAM_WORKER_CORES].default_value ==
+              AUD_SCRIPT_CORES_ANY);
+    AUD_CHECK(d->params[AUD_SCRIPT_PARAM_WORKER_CORES].max_value ==
+              AUD_SCRIPT_CORES_FAST);
     AUD_CHECK(d->num_string_keys == 2);
     AUD_CHECK(std::strcmp(d->string_keys[AUD_SCRIPT_KEY_SCRIPT_NAME].id,
                           "script_name") == 0);
@@ -398,6 +408,54 @@ AUD_TEST(a_lookahead_keeps_back_to_back_callbacks_on_time) {
       }
     }
   }
+}
+
+AUD_TEST(the_worker_places_itself_as_worker_cores_asks) {
+  // The placement each value of "worker_cores" reports on this platform.
+  auto wanted = [](uint32_t cores) {
+#if __APPLE__
+    (void)cores;
+    return static_cast<uint32_t>(AUD_SCRIPT_PLACEMENT_QOS);
+#else
+    return cores == AUD_SCRIPT_CORES_ANY
+               ? static_cast<uint32_t>(AUD_SCRIPT_PLACEMENT_ANY_CORE)
+               : 0xFFFFFFFFu;
+#endif
+  };
+  auto placementHolds = [&](uint32_t cores) {
+    for (int i = 0; i < 2000; ++i) {
+      const AudScriptStats s = stats();
+      const bool any = s.placement == AUD_SCRIPT_PLACEMENT_ANY_CORE;
+      const bool matches = wanted(cores) == 0xFFFFFFFFu
+                               ? !any && s.placement != AUD_SCRIPT_PLACEMENT_QOS
+                               : s.placement == wanted(cores);
+      if (matches && s.worker_cores == cores && s.ticks > 0) return true;
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return false;
+  };
+  aud_audio_script_reset_stats();
+  Graph g(128);
+  AUD_CHECK(g.load("aud.onTick = function () { aud.send(0, 1, 1); };") ==
+            AUD_OK);
+  g.renderOffline(4);
+  AUD_CHECK(placementHolds(AUD_SCRIPT_CORES_ANY));
+  // The parameter reaches the worker through the audio thread's atomics;
+  // the worker places itself at its next wake-up.
+  for (const uint32_t cores : {AUD_SCRIPT_CORES_FAST, AUD_SCRIPT_CORES_ANY}) {
+    g.param(AUD_SCRIPT_PARAM_WORKER_CORES, static_cast<float>(cores));
+    g.renderOffline(4);
+    AUD_CHECK(placementHolds(cores));
+  }
+  const AudScriptStats s = stats();
+#if __APPLE__
+  AUD_CHECK(s.qos_class == QOS_CLASS_USER_INTERACTIVE);
+  // macOS 11 and iOS 14.2 tell the core.
+  AUD_CHECK(s.last_cpu >= 0);
+#else
+  AUD_CHECK(s.cpus == 0);
+#endif
+  AUD_CHECK(s.late_ticks == 0);
 }
 
 AUD_TEST(a_change_of_the_lookahead_leaves_no_block_without_its_tick) {

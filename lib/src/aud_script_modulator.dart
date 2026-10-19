@@ -14,6 +14,7 @@ import 'aud_audio_script_bindings_generated.dart' as bindings;
 import 'aud_script_mode.dart';
 import 'aud_script_placement.dart';
 import 'aud_script_stats.dart';
+import 'aud_script_worker_cores.dart';
 
 // #############################################################################
 /// The node `aud.script.modulator`: runs a JavaScript source on a worker
@@ -100,6 +101,11 @@ abstract final class AudScriptModulator {
   /// tick.
   static const String lookahead = 'lookahead';
 
+  /// The cores the worker may run on, an [AudScriptWorkerCores.value];
+  /// default [AudScriptWorkerCores.any]. The worker places itself anew at
+  /// its next wake-up; Apple platforms keep their quality of service class.
+  static const String workerCores = 'worker_cores';
+
   /// The parameter ids in the order of their indices.
   static const List<String> params = [
     'mode0',
@@ -121,6 +127,7 @@ abstract final class AudScriptModulator {
     memoryLimit,
     tickBudget,
     lookahead,
+    workerCores,
   ];
 
   /// The parameters as the node declares them, in the order of their
@@ -164,6 +171,13 @@ abstract final class AudScriptModulator {
       stepped: true,
       steps: 4,
     ),
+    AudParamDescriptor(
+      id: workerCores,
+      name: 'Worker cores',
+      defaultValue: AudScriptWorkerCores.any.value.toDouble(),
+      stepped: true,
+      steps: 2,
+    ),
   ];
 
   // ...........................................................................
@@ -194,6 +208,8 @@ abstract final class AudScriptModulator {
       priority: s.priority,
       cpus: s.cpus,
       qosClass: s.qos_class,
+      lastCpu: s.last_cpu,
+      workerCores: AudScriptWorkerCores.fromValue(s.worker_cores),
       lookahead: s.lookahead,
       contextCreateUs: s.context_create_us,
       loadUs: s.load_us,

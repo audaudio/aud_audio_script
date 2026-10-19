@@ -12,12 +12,13 @@ void main() {
     group('AudScriptPlacement.fromId(id)', () {
       test('finds the placement of an id, system for others', () {
         expect(
-          [for (var id = 0; id < 5; ++id) AudScriptPlacement.fromId(id)],
+          [for (var id = 0; id < 6; ++id) AudScriptPlacement.fromId(id)],
           [
             AudScriptPlacement.system,
             AudScriptPlacement.fastCores,
             AudScriptPlacement.qos,
             AudScriptPlacement.refused,
+            AudScriptPlacement.anyCore,
             AudScriptPlacement.system,
           ],
         );

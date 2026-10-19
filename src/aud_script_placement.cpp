@@ -66,11 +66,23 @@ pid_t threadId() { return static_cast<pid_t>(syscall(SYS_gettid)); }
 
 }  // namespace
 
-AudScriptPlacement audScriptPlaceCurrentThread() {
+AudScriptPlacement audScriptPlaceCurrentThread(bool fastCores) {
   AudScriptPlacement placement;
+  placement.fastCores = fastCores;
   placement.mode = AUD_SCRIPT_PLACEMENT_SYSTEM;
-  const uint64_t fast = audScriptFastCoresOf(maxClocksKhz());
-  if (fast != 0) {
+  const uint64_t fast = fastCores ? audScriptFastCoresOf(maxClocksKhz()) : 0;
+  if (!fastCores) {
+    // Every core the system has; the kernel keeps the cpuset of the app.
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    const long cpus = sysconf(_SC_NPROCESSORS_CONF);
+    for (long cpu = 0; cpu < cpus && cpu < CPU_SETSIZE; ++cpu) {
+      CPU_SET(cpu, &set);
+    }
+    placement.mode = sched_setaffinity(0, sizeof(set), &set) == 0
+                         ? AUD_SCRIPT_PLACEMENT_ANY_CORE
+                         : AUD_SCRIPT_PLACEMENT_REFUSED;
+  } else if (fast != 0) {
     cpu_set_t set;
     CPU_ZERO(&set);
     for (size_t cpu = 0; cpu < 64; ++cpu) {
@@ -95,6 +107,8 @@ AudScriptPlacement audScriptPlaceCurrentThread() {
   return placement;
 }
 
+int32_t audScriptCurrentCpu() { return sched_getcpu(); }
+
 bool audScriptRefreshPlacement(AudScriptPlacement& placement) {
   if (placement.mode != AUD_SCRIPT_PLACEMENT_FAST_CORES) return true;
   cpu_set_t now;
@@ -118,8 +132,9 @@ bool audScriptRefreshPlacement(AudScriptPlacement& placement) {
 
 #elif __APPLE__
 
-AudScriptPlacement audScriptPlaceCurrentThread() {
+AudScriptPlacement audScriptPlaceCurrentThread(bool fastCores) {
   AudScriptPlacement placement;
+  placement.fastCores = fastCores;
   placement.mode = AUD_SCRIPT_PLACEMENT_SYSTEM;
   if (pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0) == 0) {
     placement.mode = AUD_SCRIPT_PLACEMENT_QOS;
@@ -128,17 +143,30 @@ AudScriptPlacement audScriptPlaceCurrentThread() {
   return placement;
 }
 
+int32_t audScriptCurrentCpu() {
+  size_t cpu = 0;
+  if (__builtin_available(macOS 11.0, iOS 14.2, *)) {
+    if (pthread_cpu_number_np(&cpu) == 0) return static_cast<int32_t>(cpu);
+  }
+  return -1;
+}
+
 bool audScriptRefreshPlacement(AudScriptPlacement&) { return true; }
 
 #else
 
-AudScriptPlacement audScriptPlaceCurrentThread() {
+AudScriptPlacement audScriptPlaceCurrentThread(bool fastCores) {
   AudScriptPlacement placement;
+  placement.fastCores = fastCores;
   placement.mode = AUD_SCRIPT_PLACEMENT_SYSTEM;
   if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST)) {
     placement.priority = THREAD_PRIORITY_HIGHEST;
   }
   return placement;
+}
+
+int32_t audScriptCurrentCpu() {
+  return static_cast<int32_t>(GetCurrentProcessorNumber());
 }
 
 bool audScriptRefreshPlacement(AudScriptPlacement&) { return true; }

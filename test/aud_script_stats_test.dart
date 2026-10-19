@@ -25,6 +25,8 @@ void main() {
     priority: -19,
     cpus: 0xF0,
     qosClass: 0,
+    lastCpu: 7,
+    workerCores: AudScriptWorkerCores.fast,
     lookahead: 2,
     contextCreateUs: 300,
     loadUs: 900,
@@ -40,6 +42,8 @@ void main() {
       expect(empty.placement, AudScriptPlacement.system);
       expect(empty.console, isEmpty);
       expect(empty.lookahead, 0);
+      expect(empty.lastCpu, -1);
+      expect(empty.workerCores, AudScriptWorkerCores.any);
     });
 
     group('toJson()', () {
@@ -61,6 +65,8 @@ void main() {
           'priority': -19,
           'cpus': 0xF0,
           'qosClass': 0,
+          'lastCpu': 7,
+          'workerCores': 'fast',
           'lookahead': 2,
           'contextCreateUs': 300.0,
           'loadUs': 900.0,

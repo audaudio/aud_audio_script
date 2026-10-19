@@ -82,15 +82,17 @@ void main() {
         expect(result.aborted, 0);
         if (Platform.isMacOS) {
           expect(result.placement, AudScriptPlacement.qos);
+          expect(result.lastCpu, greaterThanOrEqualTo(0));
         }
       });
 
-      test('runs the stress variant back to back', () {
+      test('runs the stress variant back to back on the fast cores', () {
         final result = AudScriptBench.measure(
           AudScriptBench.syntheticStressScript,
           ticks: 20,
           warmupTicks: 0,
           paced: false,
+          workerCores: AudScriptWorkerCores.fast,
           memoryLimitMb: 16,
           tickBudgetMs: 1000,
         );

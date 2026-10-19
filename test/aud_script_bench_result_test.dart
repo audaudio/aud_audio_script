@@ -26,6 +26,7 @@ void main() {
     priority: 0,
     cpus: 0,
     qosClass: 33,
+    lastCpu: 5,
   );
 
   group('AudScriptBenchResult', () {
@@ -54,6 +55,7 @@ void main() {
           'priority': 0,
           'cpus': 0,
           'qosClass': 33,
+          'lastCpu': 5,
         });
       });
     });

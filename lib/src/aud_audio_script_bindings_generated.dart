@@ -93,7 +93,13 @@ external int aud_audio_script_stats(ffi.Pointer<AudScriptStats> stats);
 
 const int AUD_SCRIPT_BENCH_ERROR_BYTES = 512;
 
+const int AUD_SCRIPT_BENCH_FAST_CORES = 2;
+
 const int AUD_SCRIPT_BENCH_UNPACED = 1;
+
+const int AUD_SCRIPT_CORES_ANY = 0;
+
+const int AUD_SCRIPT_CORES_FAST = 1;
 
 const int AUD_SCRIPT_KEY_SCRIPT = 0;
 
@@ -113,7 +119,7 @@ const int AUD_SCRIPT_NUM_KEYS = 2;
 
 const int AUD_SCRIPT_NUM_OUTPUTS = 16;
 
-const int AUD_SCRIPT_NUM_PARAMS = 19;
+const int AUD_SCRIPT_NUM_PARAMS = 20;
 
 const int AUD_SCRIPT_PARAM_LOOKAHEAD = 18;
 
@@ -122,6 +128,10 @@ const int AUD_SCRIPT_PARAM_MEMORY_LIMIT = 16;
 const int AUD_SCRIPT_PARAM_MODE0 = 0;
 
 const int AUD_SCRIPT_PARAM_TICK_BUDGET = 17;
+
+const int AUD_SCRIPT_PARAM_WORKER_CORES = 19;
+
+const int AUD_SCRIPT_PLACEMENT_ANY_CORE = 4;
 
 const int AUD_SCRIPT_PLACEMENT_FAST_CORES = 1;
 
@@ -235,8 +245,8 @@ final class AudScriptBenchResult extends ffi.Struct {
   @ffi.Uint32()
   external int qos_class;
 
-  @ffi.Uint32()
-  external int reserved;
+  @ffi.Int32()
+  external int last_cpu;
 
   /// The duration of a block in µs.
   @ffi.Double()
@@ -571,10 +581,12 @@ final class AudScriptStats extends ffi.Struct {
   @ffi.Double()
   external double tick_time_p99_us;
 
-  /// The placement of the last worker that started, AUD_SCRIPT_PLACEMENT_*;
-  /// the cores it is bound to, a bit per core; the nice value that held
-  /// (Android, Linux: -19, -16, -10 or 0); the quality of service class
-  /// (Apple platforms, the QOS_CLASS_* value; 0 elsewhere).
+  /// The placement of the worker that placed itself last,
+  /// AUD_SCRIPT_PLACEMENT_*; the cores it is bound to, a bit per core; the
+  /// nice value that held (Android, Linux: -19, -16, -10 or 0); the quality
+  /// of service class (Apple platforms, the QOS_CLASS_* value; 0
+  /// elsewhere); the core a worker ran its last tick on, -1 when the
+  /// platform does not tell.
   @ffi.Uint32()
   external int placement;
 
@@ -587,8 +599,8 @@ final class AudScriptStats extends ffi.Struct {
   @ffi.Uint32()
   external int qos_class;
 
-  @ffi.Uint32()
-  external int reserved;
+  @ffi.Int32()
+  external int last_cpu;
 
   /// The last load: the creation of the runtime and the context, and the
   /// evaluation of the script, in µs.
@@ -602,6 +614,14 @@ final class AudScriptStats extends ffi.Struct {
   /// after the load and every second: the count of its allocator.
   @ffi.Uint64()
   external int memory_bytes;
+
+  /// The "worker_cores" the worker that placed itself last placed itself
+  /// for, AUD_SCRIPT_CORES_*.
+  @ffi.Uint32()
+  external int worker_cores;
+
+  @ffi.Uint32()
+  external int reserved;
 
   static ffi.Pointer<AudScriptStats> $allocate(
     ffi.Allocator $allocator, {
@@ -623,10 +643,12 @@ final class AudScriptStats extends ffi.Struct {
     required int priority,
     required int cpus,
     required int qos_class,
-    required int reserved,
+    required int last_cpu,
     required double context_create_us,
     required double load_us,
     required int memory_bytes,
+    required int worker_cores,
+    required int reserved,
   }) => $allocator<AudScriptStats>()
     ..ref.struct_size = struct_size
     ..ref.lookahead = lookahead
@@ -646,8 +668,10 @@ final class AudScriptStats extends ffi.Struct {
     ..ref.priority = priority
     ..ref.cpus = cpus
     ..ref.qos_class = qos_class
-    ..ref.reserved = reserved
+    ..ref.last_cpu = last_cpu
     ..ref.context_create_us = context_create_us
     ..ref.load_us = load_us
-    ..ref.memory_bytes = memory_bytes;
+    ..ref.memory_bytes = memory_bytes
+    ..ref.worker_cores = worker_cores
+    ..ref.reserved = reserved;
 }

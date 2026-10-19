@@ -66,7 +66,8 @@ double percentile(const std::vector<double>& sorted, double share) {
 void bench(AudBenchJob& job) {
   const AudScriptBenchRequest& request = *job.request;
   AudScriptBenchResult& result = job.result;
-  const AudScriptPlacement placement = audScriptPlaceCurrentThread();
+  const AudScriptPlacement placement = audScriptPlaceCurrentThread(
+      (request.flags & AUD_SCRIPT_BENCH_FAST_CORES) != 0);
   result.placement = placement.mode;
   result.priority = placement.priority;
   result.cpus = placement.cpus;
@@ -127,6 +128,8 @@ void bench(AudBenchJob& job) {
     if (tick.timeUs > blockUs) result.over_block += 1;
     if (tick.status != AUD_SCRIPT_TICK_OK) result.aborted += 1;
   }
+  // The core of the last tick.
+  result.last_cpu = audScriptCurrentCpu();
   result.memory_bytes = runner.state()->context->memoryUsed();
   runner.adopt(nullptr);
   std::sort(timed.begin(), timed.end());
