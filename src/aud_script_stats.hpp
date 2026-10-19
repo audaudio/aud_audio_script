@@ -121,6 +121,11 @@ class AudScriptGlobalStats {
   void countLoad(int32_t result, double createUs, double loadUs,
                  uint32_t engine);
 
+  // [realtime] The lookahead of the block a modulator renders.
+  void setLookahead(uint32_t blocks) {
+    lookahead_.store(blocks, std::memory_order_relaxed);
+  }
+
   // [worker] The bytes the current context holds.
   void setMemory(uint64_t bytes) {
     memory_.store(bytes, std::memory_order_relaxed);
@@ -160,6 +165,7 @@ class AudScriptGlobalStats {
   std::atomic<int32_t> priority_{0};
   std::atomic<uint64_t> cpus_{0};
   std::atomic<uint32_t> qos_{0};
+  std::atomic<uint32_t> lookahead_{0};
   AudScriptHistogram histogram_;
   // The sum and the longest of the tick times, the times of the last load:
   // written by the workers under the mutex, read under it.

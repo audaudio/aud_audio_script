@@ -16,9 +16,8 @@
 //   never before the tick of their own. AudSpscQueue of aud_audio_core
 //   publishes every item on its own.
 // - AudScriptSlotRing carries the results from the worker to the audio
-//   thread, written and read in place, since a result holds the values of
-//   up to AUD_SCRIPT_MAX_VALUES pairs. The reader takes the newest result
-//   and drops the older ones.
+//   thread in order, written and read in place, since a result holds the
+//   values of up to AUD_SCRIPT_MAX_VALUES pairs.
 
 #ifndef AUD_SCRIPT_RINGS_HPP
 #define AUD_SCRIPT_RINGS_HPP
@@ -116,21 +115,20 @@ class AudScriptSlotRing {
                 std::memory_order_release);
   }
 
-  // [consumer] The newest published slot, or nullptr; the older ones are
-  // dropped. The slot stays the reader's until release().
-  const T* newest() {
-    uint64_t head = head_.load(std::memory_order_relaxed);
-    const uint64_t tail = tail_.load(std::memory_order_acquire);
-    if (head == tail) return nullptr;
-    if (tail - head > 1) {
-      head = tail - 1;
-      head_.store(head, std::memory_order_release);
-    }
-    return &slots_[head % N];
+  // [consumer] The published slots that wait.
+  size_t size() const {
+    return static_cast<size_t>(tail_.load(std::memory_order_acquire) -
+                               head_.load(std::memory_order_relaxed));
   }
 
-  // [consumer] Gives the slot of newest() back.
-  void release() {
+  // [consumer] The slot `index` places behind the oldest one; index below
+  // size().
+  const T* at(size_t index) const {
+    return &slots_[(head_.load(std::memory_order_relaxed) + index) % N];
+  }
+
+  // [consumer] Gives the oldest slot back.
+  void pop() {
     head_.store(head_.load(std::memory_order_relaxed) + 1,
                 std::memory_order_release);
   }

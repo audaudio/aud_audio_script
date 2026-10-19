@@ -33,6 +33,7 @@ class AudScriptStats {
     this.priority = 0,
     this.cpus = 0,
     this.qosClass = 0,
+    this.lookahead = 0,
     this.contextCreateUs = 0,
     this.loadUs = 0,
     this.memoryBytes = 0,
@@ -60,6 +61,7 @@ class AudScriptStats {
     'priority': priority,
     'cpus': cpus,
     'qosClass': qosClass,
+    'lookahead': lookahead,
     'contextCreateUs': contextCreateUs,
     'loadUs': loadUs,
     'memoryBytes': memoryBytes,
@@ -130,6 +132,10 @@ class AudScriptStats {
 
   /// Its quality of service class on Apple platforms, `QOS_CLASS_*`.
   final int qosClass;
+
+  /// The lookahead in blocks of the last block a modulator rendered; 0
+  /// before the first.
+  final int lookahead;
 
   /// The creation of the runtime and the context of the last load in µs.
   final double contextCreateUs;

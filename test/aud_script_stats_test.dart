@@ -26,6 +26,7 @@ void main() {
     priority: -19,
     cpus: 0xF0,
     qosClass: 0,
+    lookahead: 2,
     contextCreateUs: 300,
     loadUs: 900,
     memoryBytes: 1 << 20,
@@ -40,6 +41,7 @@ void main() {
       expect(empty.engine, AudScriptEngine.quickjs);
       expect(empty.placement, AudScriptPlacement.system);
       expect(empty.console, isEmpty);
+      expect(empty.lookahead, 0);
     });
 
     group('toJson()', () {
@@ -62,6 +64,7 @@ void main() {
           'priority': -19,
           'cpus': 0xF0,
           'qosClass': 0,
+          'lookahead': 2,
           'contextCreateUs': 300.0,
           'loadUs': 900.0,
           'memoryBytes': 1 << 20,

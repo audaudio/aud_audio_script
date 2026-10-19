@@ -63,6 +63,26 @@ void main() {
         expect(simulation.ticks.first.timeUs, greaterThan(0));
       });
 
+      test('delivers the control changes a lookahead later', () {
+        const script =
+            'var seen = 0;\n'
+            'aud.onControlChange = function () { ++seen; };\n'
+            'aud.onTick = function () { aud.send(0, 0, seen); };\n';
+        for (final lookahead in [1, 2, 4]) {
+          final simulation = AudScriptSimulation.simulate(
+            script,
+            blocks: 8,
+            lookahead: lookahead,
+            controlChanges: const [
+              AudScriptControlChange(frame: 0, number: 1, value: 1),
+            ],
+          );
+          expect(simulation.ticks.map((t) => t.sends.single.value), [
+            for (var tick = 1; tick < 8; ++tick) tick >= lookahead ? 1 : 0,
+          ], reason: 'lookahead $lookahead');
+        }
+      });
+
       test('throws the error of a script that does not load', () {
         expect(
           () => AudScriptSimulation.simulate('throw 1;', blocks: 4),

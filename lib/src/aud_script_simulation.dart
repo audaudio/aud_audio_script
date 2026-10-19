@@ -51,6 +51,8 @@ class AudScriptSimulation {
   /// - [blocks] the blocks, up to 1000000; the ticks run for blocks 1 to
   ///   [blocks] - 1
   /// - [controlChanges] the MIDI control changes, at their frames
+  /// - [lookahead] the lookahead of the modulator, 1 to 4: the changes of
+  ///   block j reach the tick of block j + [lookahead]
   /// - [memoryLimitMb] the heap of the context in MB
   /// - [tickBudgetMs] the longest tick in ms
   ///
@@ -68,6 +70,7 @@ class AudScriptSimulation {
     double tempo = 120,
     required int blocks,
     List<AudScriptControlChange> controlChanges = const [],
+    int lookahead = 1,
     int memoryLimitMb = 32,
     int tickBudgetMs = 100,
   }) => using((arena) {
@@ -94,6 +97,7 @@ class AudScriptSimulation {
       ..memory_limit_mb = memoryLimitMb
       ..tick_budget_ms = tickBudgetMs
       ..num_events = controlChanges.length
+      ..lookahead = lookahead
       ..events = events;
     final result = arena<Pointer<bindings.AudScriptSimulation>>();
     final operation = 'the simulation of $name';

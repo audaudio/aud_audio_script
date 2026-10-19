@@ -57,6 +57,8 @@ const AudParamDescriptor kParams[AUD_SCRIPT_NUM_PARAMS] = {
      1024.0f, 32.0f, kStepped, 1024, 0},
     {sizeof(AudParamDescriptor), "tick_budget", "Tick budget", "ms", 1.0f,
      10000.0f, 100.0f, kStepped, 10000, 0},
+    {sizeof(AudParamDescriptor), "lookahead", "Lookahead", "blocks", 1.0f, 4.0f,
+     2.0f, kStepped, 4, 0},
 };
 
 #undef AUD_SCRIPT_MODE
@@ -370,9 +372,13 @@ void AudScriptNode::emit(const AudScriptResult& result, bool onTime,
   }
 }
 
-const AudScriptResult* AudScriptNode::waitForResult(uint64_t tick) {
-  const AudScriptResult* result = results_.newest();
-  if (result != nullptr && result->tick >= tick) return result;
+void AudScriptNode::waitForResult(uint64_t tick) {
+  // The results come in the order of their blocks: the last one tells.
+  auto ready = [this, tick] {
+    const size_t size = results_.size();
+    return size > 0 && results_.at(size - 1)->tick >= tick;
+  };
+  if (ready()) return;
   // An offline block waits for its worker; a live block never does.
   AudScriptRealtimeExempt exempt;
   const int64_t budgetNs = static_cast<int64_t>(
@@ -381,9 +387,7 @@ const AudScriptResult* AudScriptNode::waitForResult(uint64_t tick) {
   const int64_t deadline = aud_clock_now_ns() + budgetNs + kOfflineSlackNs;
   waiting_.store(true, std::memory_order_seq_cst);
   std::atomic_thread_fence(std::memory_order_seq_cst);
-  while (true) {
-    result = results_.newest();
-    if (result != nullptr && result->tick >= tick) break;
+  while (!ready()) {
     const int64_t left = deadline - aud_clock_now_ns();
     if (left <= 0) break;
     resultReady_.waitFor(std::min(left, kWaitSliceNs));
@@ -391,69 +395,116 @@ const AudScriptResult* AudScriptNode::waitForResult(uint64_t tick) {
   waiting_.store(false, std::memory_order_seq_cst);
   while (resultReady_.tryWait()) {
   }
-  return result;
 }
 
-void AudScriptNode::process(const AudProcessContext& context) {
+const AudScriptResult* AudScriptNode::takeResult(uint64_t tick) {
+  // The last result of this block or before; the ones before it go.
+  const size_t size = results_.size();
+  size_t last = size;
+  for (size_t i = 0; i < size && results_.at(i)->tick <= tick; ++i) last = i;
+  if (last == size) return nullptr;
+  for (size_t i = 0; i < last; ++i) results_.pop();
+  return results_.at(0);
+}
+
+AudScriptNode::Prediction AudScriptNode::predict(
+    const AudProcessContext& context) const {
+  Prediction prediction;
   const uint32_t frames = context.frames;
-  for (uint32_t i = 0; i < context.num_events; ++i) {
-    const AudEvent& event = context.events[i];
-    if (event.type == AUD_EVENT_PARAM) {
-      setParam(event.words[0], aud_event_param_value(&event));
-    } else {
-      stageEvent(event);
-    }
+  const AudTransportSnapshot* transport = context.transport;
+  if (transport == nullptr || transport->num_segments == 0 ||
+      transport->segments == nullptr) {
+    return prediction;
   }
-  // The values of the worker.
-  const uint64_t tick = block_;
-  const bool offline = (context.flags & AUD_PROCESS_OFFLINE) != 0;
-  const AudScriptResult* result =
-      tick > 0 && offline ? waitForResult(tick) : results_.newest();
-  bool onTime = false;
-  if (result != nullptr) {
-    onTime = result->tick >= tick;
-    if (frames > 0) emit(*result, onTime, frames);
-    results_.release();
+  const AudTransportSegment* segment =
+      aud_transport_segment_at(transport, frames > 0 ? frames - 1 : 0);
+  if (segment == nullptr) return prediction;
+  const double after = static_cast<double>(frames - segment->sample_offset);
+  prediction.endBeat =
+      aud_beats_from_ticks(segment->beat) +
+      aud_transport_beats_after(segment, context.sample_rate, after);
+  prediction.tempo = segment->tempo + segment->tempo_increment * after;
+  prediction.playing = (segment->flags & AUD_SEGMENT_PLAYING) != 0;
+  if (prediction.playing && context.sample_rate > 0) {
+    // As the tick grid writes it.
+    prediction.beatsPerBlock = static_cast<double>(frames) * prediction.tempo /
+                               60 / context.sample_rate;
   }
-  AudScriptGlobalStats& stats = AudScriptGlobalStats::get();
-  if (tick > 0 && !onTime) stats.countLate();
-  // The request of the next block, its beat predicted from the end of this
-  // one.
+  return prediction;
+}
+
+void AudScriptNode::stageRequest(uint64_t block, const Prediction& prediction,
+                                 const AudProcessContext& context,
+                                 uint32_t lookahead) {
   AudScriptEntry request;
   request.kind = AudScriptEntry::kRequest;
-  request.tick = tick + 1;
-  request.frames = frames;
+  request.tick = block;
+  request.frames = context.frames;
   request.sampleRate = context.sample_rate;
-  request.tempo = 120;
+  // Block n + 1 starts where block n ends; the blocks after it follow with
+  // the same frames and tempo.
+  request.b0 = prediction.endBeat + static_cast<double>(block - block_ - 1) *
+                                        prediction.beatsPerBlock;
+  request.tempo = prediction.tempo;
+  request.playing = prediction.playing ? 1 : 0;
   request.budgetMs = static_cast<uint32_t>(
       params_[AUD_SCRIPT_PARAM_TICK_BUDGET].load(std::memory_order_relaxed));
   request.memoryMb = static_cast<uint32_t>(
       params_[AUD_SCRIPT_PARAM_MEMORY_LIMIT].load(std::memory_order_relaxed));
-  const AudTransportSnapshot* transport = context.transport;
-  if (transport != nullptr && transport->num_segments > 0 &&
-      transport->segments != nullptr) {
-    const AudTransportSegment* segment =
-        aud_transport_segment_at(transport, frames > 0 ? frames - 1 : 0);
-    if (segment != nullptr) {
-      const double after = static_cast<double>(frames - segment->sample_offset);
-      request.b0 =
-          aud_beats_from_ticks(segment->beat) +
-          aud_transport_beats_after(segment, context.sample_rate, after);
-      request.tempo = segment->tempo + segment->tempo_increment * after;
-      request.playing = (segment->flags & AUD_SEGMENT_PLAYING) != 0 ? 1 : 0;
-    }
-  }
+  request.lookahead = lookahead;
   if (requests_.room() > 0) {
     requests_.stage(request);
   } else {
-    stats.countSkipped(1);
+    AudScriptGlobalStats::get().countSkipped(1);
   }
+  requested_ = block;
+}
+
+void AudScriptNode::process(const AudProcessContext& context) {
+  const uint32_t frames = context.frames;
+  // The parameters first: a new lookahead counts from this block on.
+  for (uint32_t i = 0; i < context.num_events; ++i) {
+    const AudEvent& event = context.events[i];
+    if (event.type == AUD_EVENT_PARAM) {
+      setParam(event.words[0], aud_event_param_value(&event));
+    }
+  }
+  const uint32_t lookahead = static_cast<uint32_t>(
+      params_[AUD_SCRIPT_PARAM_LOOKAHEAD].load(std::memory_order_relaxed));
+  const uint64_t tick = block_;
+  const uint64_t target = tick + lookahead;
+  const Prediction prediction = predict(context);
+  // The blocks before the target that nobody requested yet, before the
+  // events of this block, which belong to the target's tick.
+  while (requested_ + 1 < target) {
+    stageRequest(requested_ + 1, prediction, context, lookahead);
+  }
+  for (uint32_t i = 0; i < context.num_events; ++i) {
+    const AudEvent& event = context.events[i];
+    if (event.type != AUD_EVENT_PARAM) stageEvent(event);
+  }
+  // The values of the worker for this block.
+  if (tick > 0 && (context.flags & AUD_PROCESS_OFFLINE) != 0) {
+    waitForResult(tick);
+  }
+  const AudScriptResult* result = takeResult(tick);
+  bool onTime = false;
+  if (result != nullptr) {
+    onTime = result->tick == tick;
+    if (frames > 0) emit(*result, onTime, frames);
+    results_.pop();
+  }
+  AudScriptGlobalStats& stats = AudScriptGlobalStats::get();
+  if (tick > 0 && !onTime) stats.countLate();
+  stats.setLookahead(lookahead);
+  // The request of the block `lookahead` blocks ahead.
+  if (requested_ < target) stageRequest(target, prediction, context, lookahead);
   if (dropped_ > 0) {
     stats.countDropped(dropped_);
     dropped_ = 0;
   }
   requests_.publish();
-  issued_.store(tick + 1, std::memory_order_release);
+  issued_.store(requested_, std::memory_order_release);
   wake_.post();
   block_ = tick + 1;
 }
@@ -595,6 +646,34 @@ void AudScriptNode::measureMemory(bool force) {
   }
 }
 
+void AudScriptNode::runRequest(const AudScriptEntry& request) {
+  if (pending_ != nullptr && request.tick > pendingAfter_) {
+    runner_.adopt(std::move(pending_));
+    measuredNs_ = 0;
+  }
+  AudScriptState* state = runner_.state();
+  const size_t limit = static_cast<size_t>(request.memoryMb) * kMegabyte;
+  if (state != nullptr && limit > 0 && limit != state->memoryLimit) {
+    state->context->setMemoryLimit(limit);
+    state->memoryLimit = limit;
+  }
+  AudScriptBlock block;
+  block.tick = request.tick;
+  block.b0 = request.b0;
+  block.tempo = request.tempo;
+  block.playing = request.playing != 0;
+  block.sampleRate = request.sampleRate;
+  block.frames = request.frames;
+  const AudScriptTickResult result =
+      runner_.runTick(block, inputs_.data(), inputs_.size(),
+                      static_cast<int64_t>(request.budgetMs) * 1000000LL);
+  inputs_.clear();
+  publish(request.tick, result.grid.offset);
+  if (result.ran) {
+    AudScriptGlobalStats::get().countTick(result.timeUs, result.status);
+  }
+}
+
 void AudScriptNode::workerMain() {
   placement_ = audScriptPlaceCurrentThread();
   AudScriptGlobalStats& stats = AudScriptGlobalStats::get();
@@ -603,54 +682,41 @@ void AudScriptNode::workerMain() {
   while (!stop_.load(std::memory_order_acquire)) {
     wake_.waitFor(kMeasureIntervalNs);
     if (stop_.load(std::memory_order_acquire)) break;
-    AudScriptEntry newest;
-    uint64_t requests = 0;
+    batch_.clear();
     AudScriptEntry entry;
+    size_t requests = 0;
+    size_t newest = 0;
     while (requests_.pop(entry)) {
       if (entry.kind == AudScriptEntry::kRequest) {
-        newest = entry;
         requests += 1;
-        continue;
+        newest = batch_.size();
       }
-      AudScriptInput input;
-      input.kind = entry.kind == AudScriptEntry::kControlChange
-                       ? AudScriptInput::kControlChange
-                       : AudScriptInput::kControl;
-      input.channel = entry.channel;
-      input.number = entry.number;
-      input.value = entry.value;
-      inputs_.push_back(input);
+      batch_.push_back(entry);
     }
     // The loads that arrived before the newest request are visible now.
     takeLoads();
-    if (requests == 0) {
-      measureMemory(false);
-      continue;
+    // More requests than the lookahead wait: the worker fell behind and
+    // runs the newest one only.
+    const uint32_t lookahead =
+        requests > 0 ? std::max<uint32_t>(1, batch_[newest].lookahead) : 1;
+    const bool behind = requests > lookahead;
+    if (behind) stats.countSkipped(requests - 1);
+    for (size_t i = 0; i < batch_.size(); ++i) {
+      const AudScriptEntry& e = batch_[i];
+      if (e.kind != AudScriptEntry::kRequest) {
+        AudScriptInput input;
+        input.kind = e.kind == AudScriptEntry::kControlChange
+                         ? AudScriptInput::kControlChange
+                         : AudScriptInput::kControl;
+        input.channel = e.channel;
+        input.number = e.number;
+        input.value = e.value;
+        inputs_.push_back(input);
+      } else if (!behind || i == newest) {
+        runRequest(e);
+      }
     }
-    if (requests > 1) stats.countSkipped(requests - 1);
-    if (pending_ != nullptr && newest.tick > pendingAfter_) {
-      runner_.adopt(std::move(pending_));
-      measuredNs_ = 0;
-    }
-    AudScriptState* state = runner_.state();
-    const size_t limit = static_cast<size_t>(newest.memoryMb) * kMegabyte;
-    if (state != nullptr && limit > 0 && limit != state->memoryLimit) {
-      state->context->setMemoryLimit(limit);
-      state->memoryLimit = limit;
-    }
-    AudScriptBlock block;
-    block.tick = newest.tick;
-    block.b0 = newest.b0;
-    block.tempo = newest.tempo;
-    block.playing = newest.playing != 0;
-    block.sampleRate = newest.sampleRate;
-    block.frames = newest.frames;
-    const AudScriptTickResult result =
-        runner_.runTick(block, inputs_.data(), inputs_.size(),
-                        static_cast<int64_t>(newest.budgetMs) * 1000000LL);
-    inputs_.clear();
-    publish(newest.tick, result.grid.offset);
-    if (result.ran) stats.countTick(result.timeUs, result.status);
+    // Events after the last request wait for the next one.
     measureMemory(false);
   }
   // The contexts end on the thread that ran them.

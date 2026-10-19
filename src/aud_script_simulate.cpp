@@ -25,6 +25,7 @@ namespace aud_script {
 namespace {
 
 constexpr uint32_t kMaxBlocks = 1000000;
+constexpr uint32_t kMaxLookahead = 4;
 constexpr size_t kMegabyte = 1024u * 1024u;
 
 // What the thread of a simulation works on.
@@ -52,6 +53,7 @@ bool valid(const AudScriptSimulationRequest* request) {
     return false;
   }
   if (!(request->tempo >= 1 && request->tempo <= 999)) return false;
+  if (request->lookahead > kMaxLookahead) return false;
   if (request->num_events > 0 && request->events == nullptr) return false;
   for (uint32_t i = 0; i < request->num_events; ++i) {
     const AudScriptControlChange& event = request->events[i];
@@ -101,13 +103,16 @@ void simulate(AudSimulationJob& job) {
       static_cast<int64_t>(request.tick_budget_ms > 0 ? request.tick_budget_ms
                                                       : 100) *
       1000000LL;
+  // The events of block j reach the tick of block j + lookahead.
+  const uint32_t lookahead = request.lookahead > 0 ? request.lookahead : 1;
   std::vector<AudScriptInput> inputs;
   size_t next = 0;
   job.ticks.reserve(request.blocks);
   for (uint32_t n = 1; n < request.blocks; ++n) {
-    // The events of the blocks before block n.
+    // The events of the blocks up to block n - lookahead.
     inputs.clear();
-    while (next < events.size() && events[next].frame / request.frames < n) {
+    while (next < events.size() &&
+           events[next].frame / request.frames + lookahead <= n) {
       AudScriptInput input;
       input.kind = AudScriptInput::kControlChange;
       input.channel = events[next].channel;

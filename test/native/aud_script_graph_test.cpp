@@ -74,6 +74,10 @@ AUD_TEST(registers_the_modulator_with_an_engine_once) {
     AUD_CHECK(std::strcmp(d->params[AUD_SCRIPT_PARAM_TICK_BUDGET].id,
                           "tick_budget") == 0);
     AUD_CHECK(d->params[AUD_SCRIPT_PARAM_TICK_BUDGET].default_value == 100);
+    AUD_CHECK(std::strcmp(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].id,
+                          "lookahead") == 0);
+    AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].default_value == 2);
+    AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].max_value == 4);
     AUD_CHECK(d->num_string_keys == 3);
     AUD_CHECK(std::strcmp(d->string_keys[AUD_SCRIPT_KEY_ENGINE].id, "engine") ==
               0);
@@ -117,8 +121,9 @@ AUD_TEST(ramps_a_new_value_to_the_last_frame_of_the_block) {
     AUD_CHECK(records[0].value == static_cast<float>(block / 1000.0));
   }
   const AudScriptStats s = stats();
-  // Tick 10, the request the last block issued, may have run too.
-  AUD_CHECK(s.ticks == 9 || s.ticks == 10);
+  // Ticks 10 and 11, the requests of the last block with the lookahead of
+  // 2, may have run too.
+  AUD_CHECK(s.ticks >= 9 && s.ticks <= 11);
   AUD_CHECK(s.late_ticks == 0);
   AUD_CHECK(s.loads == 1 && s.failed_loads == 0);
   AUD_CHECK(s.memory_bytes > 0);
@@ -126,60 +131,64 @@ AUD_TEST(ramps_a_new_value_to_the_last_frame_of_the_block) {
 }
 
 AUD_TEST(steps_from_the_old_to_the_new_value_at_the_grid_point) {
-  aud_audio_script_reset_stats();
-  const std::string script =
-      "aud.onTick = function () {\n"
-      "  aud.send(1, 301, aud.time.tick / 100);\n"
-      "  aud.send(2, 302, aud.time.beat);\n"
-      "};\n";
-  Graph g(kSafeFrames, kSafeRate);
-  g.param(AUD_SCRIPT_PARAM_MODE0 + 1, AUD_SCRIPT_MODE_STEP);
-  g.play(kSafeTempo);
-  AUD_CHECK(g.load(script) == AUD_OK);
-  const uint32_t blocks = 200;
-  g.renderOffline(blocks);
-  AudScriptSimulation* simulation =
-      simulate(script, kSafeRate, kSafeFrames, kSafeTempo, blocks);
-  AUD_CHECK(simulation != nullptr && simulation->num_ticks == blocks - 1);
-  if (simulation == nullptr) return;
-  uint32_t inside = 0;
-  for (uint32_t i = 0; i < simulation->num_ticks; ++i) {
-    const AudScriptSimulationTick& tick = simulation->ticks[i];
-    const int64_t block = tick.tick;
-    const uint32_t k = tick.offset;
-    std::vector<Record> stepped;
-    std::vector<Record> ramped;
-    for (const Record& record : recordsOf(block)) {
-      (record.port == 1 ? stepped : ramped).push_back(record);
-    }
-    // The stepped output: the old value one frame before k, the new at k.
-    const float now = static_cast<float>(block / 100.0);
-    const float before = static_cast<float>((block - 1) / 100.0);
-    if (block > 1 && k > 0) {
-      inside += 1;
-      AUD_CHECK(stepped.size() == 2);
-      if (stepped.size() == 2) {
-        AUD_CHECK(stepped[0].offset == k - 1 && stepped[0].value == before);
-        AUD_CHECK(stepped[1].offset == k && stepped[1].value == now);
+  for (const uint32_t lookahead : {1u, 2u, 4u}) {
+    aud_audio_script_reset_stats();
+    const std::string script =
+        "aud.onTick = function () {\n"
+        "  aud.send(1, 301, aud.time.tick / 100);\n"
+        "  aud.send(2, 302, aud.time.beat);\n"
+        "};\n";
+    Graph g(kSafeFrames, kSafeRate);
+    g.param(AUD_SCRIPT_PARAM_MODE0 + 1, AUD_SCRIPT_MODE_STEP);
+    g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, static_cast<float>(lookahead));
+    g.play(kSafeTempo);
+    AUD_CHECK(g.load(script) == AUD_OK);
+    const uint32_t blocks = 200;
+    g.renderOffline(blocks);
+    AudScriptSimulation* simulation =
+        simulate(script, kSafeRate, kSafeFrames, kSafeTempo, blocks);
+    AUD_CHECK(simulation != nullptr && simulation->num_ticks == blocks - 1);
+    if (simulation == nullptr) continue;
+    uint32_t inside = 0;
+    for (uint32_t i = 0; i < simulation->num_ticks; ++i) {
+      const AudScriptSimulationTick& tick = simulation->ticks[i];
+      const int64_t block = tick.tick;
+      const uint32_t k = tick.offset;
+      std::vector<Record> stepped;
+      std::vector<Record> ramped;
+      for (const Record& record : recordsOf(block)) {
+        (record.port == 1 ? stepped : ramped).push_back(record);
       }
-    } else {
-      AUD_CHECK(stepped.size() == 1);
-      if (stepped.size() == 1) {
-        AUD_CHECK(stepped[0].offset == k && stepped[0].value == now);
+      // The stepped output: the old value one frame before k, the new at k.
+      const float now = static_cast<float>(block / 100.0);
+      const float before = static_cast<float>((block - 1) / 100.0);
+      if (block > 1 && k > 0) {
+        inside += 1;
+        AUD_CHECK(stepped.size() == 2);
+        if (stepped.size() == 2) {
+          AUD_CHECK(stepped[0].offset == k - 1 && stepped[0].value == before);
+          AUD_CHECK(stepped[1].offset == k && stepped[1].value == now);
+        }
+      } else {
+        AUD_CHECK(stepped.size() == 1);
+        if (stepped.size() == 1) {
+          AUD_CHECK(stepped[0].offset == k && stepped[0].value == now);
+        }
+      }
+      // The ramped output takes the beat of the grid point, the same as the
+      // simulation's, at the last frame.
+      AUD_CHECK(ramped.size() == 1);
+      if (ramped.size() == 1) {
+        AUD_CHECK(ramped[0].offset == kSafeFrames - 1);
+        AUD_CHECK(ramped[0].value == static_cast<float>(tick.beat));
       }
     }
-    // The ramped output takes the beat of the grid point, the same as the
-    // simulation's, at the last frame.
-    AUD_CHECK(ramped.size() == 1);
-    if (ramped.size() == 1) {
-      AUD_CHECK(ramped[0].offset == kSafeFrames - 1);
-      AUD_CHECK(ramped[0].value == static_cast<float>(tick.beat));
-    }
+    // Most grid points lie inside their block.
+    AUD_CHECK(inside > blocks / 2);
+    aud_audio_script_simulation_free(simulation);
+    AUD_CHECK(stats().late_ticks == 0);
+    AUD_CHECK(stats().lookahead == lookahead);
   }
-  // Most grid points lie inside their block.
-  AUD_CHECK(inside > blocks / 2);
-  aud_audio_script_simulation_free(simulation);
-  AUD_CHECK(stats().late_ticks == 0);
 }
 
 AUD_TEST(emits_a_value_only_when_it_changed) {
@@ -217,10 +226,12 @@ AUD_TEST(a_new_context_starts_without_values_and_emits_what_differs) {
   for (const Record& record : Recorder::get().records) {
     got.emplace_back(record.block, record.id, record.value);
   }
+  // The blocks requested before the load - up to block 2 + lookahead 2 -
+  // tick the old script; block 5 is the first of the new one.
   const std::vector<std::tuple<int64_t, uint32_t, float>> wanted = {
       {1, 1, 0.25f},
       {1, 2, 0.5f},
-      {4, 3, 0.75f},
+      {5, 3, 0.75f},
   };
   AUD_CHECK(got == wanted);
 }
@@ -228,45 +239,54 @@ AUD_TEST(a_new_context_starts_without_values_and_emits_what_differs) {
 // ############################################################################
 // Input events
 
-AUD_TEST(delivers_the_events_of_a_block_before_the_tick_of_the_next) {
-  aud_audio_script_reset_stats();
-  Graph g(100);
-  AUD_CHECK(
-      g.load("var log = [];\n"
-             "aud.onControlChange = function (c, n, v) {\n"
-             "  log.push(c * 1000000 + n * 1000 + v);\n"
-             "};\n"
-             "aud.onControl = function (id, v) { log.push(-id - v); };\n"
-             "aud.onTick = function () {\n"
-             "  for (var i = 0; i < log.length; ++i) aud.send(4, i, log[i]);\n"
-             "  aud.send(5, 0, log.length);\n"
-             "  log = [];\n"
-             "};\n") == AUD_OK);
-  // Two changes in block 1 and one in block 2; a numeric control in block
-  // 2 through the event input.
-  g.controlChange(150, 3, 74, 100);
-  g.controlChange(199, 0, 1, 7);
-  g.controlChange(200, 15, 127, 127);
-  const AudEvent control = aud_event_control_float(42, 0.5f, 0, 0);
-  AudTimestamp at{};
-  at.struct_size = sizeof(AudTimestamp);
-  at.domain = AUD_TIME_SAMPLE;
-  at.value = 250;
-  AUD_CHECK(aud_graph_send_event(g.graph, g.modulator, &control, &at, 0) ==
-            AUD_OK);
-  g.renderOffline(5);
-  std::vector<std::tuple<int64_t, uint32_t, uint32_t, float>> got;
-  for (const Record& record : Recorder::get().records) {
-    got.emplace_back(record.block, record.port, record.id, record.value);
+AUD_TEST(delivers_the_events_of_a_block_before_the_tick_lookahead_later) {
+  for (const int64_t lookahead : {1, 2, 3}) {
+    aud_audio_script_reset_stats();
+    Graph g(100);
+    g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, static_cast<float>(lookahead));
+    AUD_CHECK(
+        g.load(
+            "var log = [];\n"
+            "aud.onControlChange = function (c, n, v) {\n"
+            "  log.push(c * 1000000 + n * 1000 + v);\n"
+            "};\n"
+            "aud.onControl = function (id, v) { log.push(-id - v); };\n"
+            "aud.onTick = function () {\n"
+            "  for (var i = 0; i < log.length; ++i) aud.send(4, i, log[i]);\n"
+            "  aud.send(5, 0, log.length);\n"
+            "  log = [];\n"
+            "};\n") == AUD_OK);
+    // Two changes in block 1 and one in block 2; a numeric control in block
+    // 2 through the event input.
+    g.controlChange(150, 3, 74, 100);
+    g.controlChange(199, 0, 1, 7);
+    g.controlChange(200, 15, 127, 127);
+    const AudEvent control = aud_event_control_float(42, 0.5f, 0, 0);
+    AudTimestamp at{};
+    at.struct_size = sizeof(AudTimestamp);
+    at.domain = AUD_TIME_SAMPLE;
+    at.value = 250;
+    AUD_CHECK(aud_graph_send_event(g.graph, g.modulator, &control, &at, 0) ==
+              AUD_OK);
+    g.renderOffline(static_cast<uint32_t>(lookahead) + 4);
+    std::vector<std::tuple<int64_t, uint32_t, uint32_t, float>> got;
+    for (const Record& record : Recorder::get().records) {
+      got.emplace_back(record.block, record.port, record.id, record.value);
+    }
+    // The events of block j reach the tick of block j + lookahead. Within a
+    // block the values come in the order the script first sent their pairs.
+    const int64_t l = lookahead;
+    const std::vector<std::tuple<int64_t, uint32_t, uint32_t, float>> wanted = {
+        {1, 5, 0, 0.0f},
+        {1 + l, 5, 0, 2.0f},
+        {1 + l, 4, 0, 3074100.0f},
+        {1 + l, 4, 1, 1007.0f},
+        {2 + l, 4, 0, 15127127.0f},
+        {2 + l, 4, 1, -42.5f},
+        {3 + l, 5, 0, 0.0f},
+    };
+    AUD_CHECK(got == wanted);
   }
-  // Within a block the values come in the order the script first sent
-  // their pairs.
-  const std::vector<std::tuple<int64_t, uint32_t, uint32_t, float>> wanted = {
-      {1, 5, 0, 0.0f},    {2, 5, 0, 2.0f},        {2, 4, 0, 3074100.0f},
-      {2, 4, 1, 1007.0f}, {3, 4, 0, 15127127.0f}, {3, 4, 1, -42.5f},
-      {4, 5, 0, 0.0f},
-  };
-  AUD_CHECK(got == wanted);
 }
 
 // ############################################################################
@@ -275,6 +295,7 @@ AUD_TEST(delivers_the_events_of_a_block_before_the_tick_of_the_next) {
 AUD_TEST(a_late_worker_holds_counts_and_catches_up) {
   aud_audio_script_reset_stats();
   Graph g(128);
+  g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, 1);
   g.param(AUD_SCRIPT_PARAM_MODE0 + 3, AUD_SCRIPT_MODE_STEP);
   AUD_CHECK(g.load("aud.onTick = function () {\n"
                    "  var start = Date.now();\n"
@@ -318,6 +339,7 @@ AUD_TEST(a_late_worker_holds_counts_and_catches_up) {
 AUD_TEST(a_late_result_ramps_over_the_next_block_in_ramp_mode) {
   aud_audio_script_reset_stats();
   Graph g(128);
+  g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, 1);
   AUD_CHECK(g.load("aud.onTick = function () {\n"
                    "  var start = Date.now();\n"
                    "  while (Date.now() - start < 30) {}\n"
@@ -338,25 +360,93 @@ AUD_TEST(a_late_result_ramps_over_the_next_block_in_ramp_mode) {
 }
 
 // ############################################################################
+// The lookahead
+
+AUD_TEST(a_lookahead_keeps_back_to_back_callbacks_on_time) {
+  // Two callbacks without time between them, as after a late callback,
+  // then a pause; the tick takes about 2 ms of a block of 5.3 ms.
+  for (const uint32_t lookahead : {1u, 2u}) {
+    aud_audio_script_reset_stats();
+    Graph g(256);
+    g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, static_cast<float>(lookahead));
+    AUD_CHECK(g.load("aud.onTick = function () {\n"
+                     "  var start = Date.now();\n"
+                     "  while (Date.now() - start < 2) {}\n"
+                     "  aud.send(0, 1, aud.time.tick);\n"
+                     "};\n") == AUD_OK);
+    g.renderLive(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    for (int pair = 0; pair < 15; ++pair) {
+      g.renderLive(2);
+      std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    }
+    const AudScriptStats s = stats();
+    if (lookahead == 1) {
+      // The second callback of each pair finds no result.
+      AUD_CHECK(s.late_ticks == 15);
+    } else {
+      // The worker computed it during the pause before.
+      AUD_CHECK(s.late_ticks == 0);
+      AUD_CHECK(s.skipped_requests == 0);
+      std::vector<float> values;
+      for (const Record& record : Recorder::get().records) {
+        values.push_back(record.value);
+      }
+      AUD_CHECK(values.size() == 30);
+      for (size_t i = 0; i < values.size(); ++i) {
+        AUD_CHECK(values[i] == static_cast<float>(i + 1));
+      }
+    }
+  }
+}
+
+AUD_TEST(a_change_of_the_lookahead_leaves_no_block_without_its_tick) {
+  aud_audio_script_reset_stats();
+  Graph g(128);
+  AUD_CHECK(g.load("aud.onTick = function () {\n"
+                   "  aud.send(0, 1, aud.time.tick);\n"
+                   "};\n") == AUD_OK);
+  g.renderOffline(5);
+  g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, 4);
+  g.renderOffline(5);
+  g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, 1);
+  g.renderOffline(5);
+  g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, 3);
+  g.renderOffline(5);
+  std::vector<std::pair<int64_t, float>> got;
+  for (const Record& record : Recorder::get().records) {
+    got.emplace_back(record.block, record.value);
+  }
+  std::vector<std::pair<int64_t, float>> wanted;
+  for (int64_t block = 1; block < 20; ++block) {
+    wanted.emplace_back(block, static_cast<float>(block));
+  }
+  AUD_CHECK(got == wanted);
+  const AudScriptStats s = stats();
+  AUD_CHECK(s.late_ticks == 0 && s.skipped_requests == 0);
+  AUD_CHECK(s.lookahead == 3);
+}
+
+// ############################################################################
 // Budget, memory, loads
 
 AUD_TEST(interrupts_a_tick_over_its_budget_and_drops_its_values) {
   aud_audio_script_reset_stats();
   Graph g(128);
+  // A node that has not rendered takes a parameter at once.
   g.param(AUD_SCRIPT_PARAM_TICK_BUDGET, 30);
-  g.renderOffline(1);
   AUD_CHECK(g.load("aud.onTick = function () {\n"
                    "  aud.send(0, 1, aud.time.tick);\n"
                    "  if (aud.time.tick === 3) { for (;;) {} }\n"
                    "};\n") == AUD_OK);
-  g.renderOffline(6);
+  g.renderOffline(7);
   std::vector<std::pair<int64_t, float>> got;
   for (const Record& record : Recorder::get().records) {
     got.emplace_back(record.block, record.value);
   }
   // Tick 3 was aborted: block 3 emits nothing, the values hold.
   const std::vector<std::pair<int64_t, float>> wanted = {
-      {2, 2.0f}, {4, 4.0f}, {5, 5.0f}, {6, 6.0f}};
+      {1, 1.0f}, {2, 2.0f}, {4, 4.0f}, {5, 5.0f}, {6, 6.0f}};
   AUD_CHECK(got == wanted);
   const AudScriptStats s = stats();
   AUD_CHECK(s.aborted_ticks == 1);
@@ -368,7 +458,6 @@ AUD_TEST(the_memory_limit_stops_a_load_and_a_tick) {
   aud_audio_script_reset_stats();
   Graph g(128);
   g.param(AUD_SCRIPT_PARAM_MEMORY_LIMIT, 2);
-  g.renderOffline(1);
   AUD_CHECK(
       g.load(
           "var keep = [];\n"
@@ -519,8 +608,10 @@ std::vector<AudScriptControlChange> synthetic_events() {
 }
 
 // Renders the synthetic workload offline on a new graph.
-std::vector<Record> renderSynthetic(uint32_t blocks, bool stress = false) {
+std::vector<Record> renderSynthetic(uint32_t blocks, bool stress,
+                                    uint32_t lookahead) {
   Graph g(kSafeFrames, kSafeRate);
+  g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, static_cast<float>(lookahead));
   g.play(kSafeTempo);
   AUD_CHECK(g.load(syntheticScript(stress)) == AUD_OK);
   for (const AudScriptControlChange& event : synthetic_events()) {
@@ -534,62 +625,66 @@ std::vector<Record> renderSynthetic(uint32_t blocks, bool stress = false) {
 
 AUD_TEST(offline_renders_are_deterministic_and_never_late) {
   AUD_CHECK(!syntheticScript().empty());
-  aud_audio_script_reset_stats();
-  const std::vector<Record> first = renderSynthetic(400);
-  const std::vector<Record> second = renderSynthetic(400);
-  AUD_CHECK(first.size() > 400);
-  AUD_CHECK(first == second);
-  const AudScriptStats s = stats();
-  AUD_CHECK(s.late_ticks == 0);
-  AUD_CHECK(s.skipped_requests == 0);
-  // The worker may also run the request the last block issued.
-  AUD_CHECK(s.ticks >= 2 * 399 && s.ticks <= 2 * 400);
-  AUD_CHECK(s.aborted_ticks == 0);
+  for (const uint32_t lookahead : {1u, 2u}) {
+    aud_audio_script_reset_stats();
+    const std::vector<Record> first = renderSynthetic(400, false, lookahead);
+    const std::vector<Record> second = renderSynthetic(400, false, lookahead);
+    AUD_CHECK(first.size() > 400);
+    AUD_CHECK(first == second);
+    const AudScriptStats s = stats();
+    AUD_CHECK(s.late_ticks == 0);
+    AUD_CHECK(s.skipped_requests == 0);
+    // The worker may also run the requests the last blocks issued.
+    AUD_CHECK(s.ticks >= 2 * 399 && s.ticks <= 2 * (399 + lookahead));
+    AUD_CHECK(s.aborted_ticks == 0);
+  }
 }
 
 AUD_TEST(the_emissions_of_the_synthetic_workload_equal_the_simulation) {
-  for (const bool stress : {false, true}) {
-    const uint32_t blocks = 500;
-    const std::vector<Record> records = renderSynthetic(blocks, stress);
-    AudScriptSimulation* simulation =
-        simulate(syntheticScript(stress), kSafeRate, kSafeFrames, kSafeTempo,
-                 blocks, synthetic_events());
-    AUD_CHECK(simulation != nullptr && simulation->load_result == AUD_OK);
-    if (simulation == nullptr) continue;
-    // The changes the node must emit: per tick the last value of each pair,
-    // when it differs from the value emitted before, at the last frame.
-    std::map<std::pair<uint32_t, uint32_t>, float> emitted;
-    std::vector<Record> wanted;
-    for (uint32_t t = 0; t < simulation->num_ticks; ++t) {
-      const AudScriptSimulationTick& tick = simulation->ticks[t];
-      AUD_CHECK(tick.status == AUD_SCRIPT_TICK_OK);
-      AUD_CHECK(tick.num_sends == 12);
-      std::map<std::pair<uint32_t, uint32_t>, float> last;
-      std::vector<std::pair<uint32_t, uint32_t>> order;
-      for (uint32_t s = 0; s < tick.num_sends; ++s) {
-        const AudScriptSimulationSend& send =
-            simulation->sends[tick.first_send + s];
-        const auto pair = std::make_pair(send.output, send.id);
-        if (last.find(pair) == last.end()) order.push_back(pair);
-        last[pair] = static_cast<float>(send.value);
+  for (const uint32_t lookahead : {1u, 2u})
+    for (const bool stress : {false, true}) {
+      const uint32_t blocks = 500;
+      const std::vector<Record> records =
+          renderSynthetic(blocks, stress, lookahead);
+      AudScriptSimulation* simulation = simulate(
+          syntheticScript(stress), kSafeRate, kSafeFrames, kSafeTempo, blocks,
+          synthetic_events(), AUD_SCRIPT_ENGINE_QUICKJS, lookahead);
+      AUD_CHECK(simulation != nullptr && simulation->load_result == AUD_OK);
+      if (simulation == nullptr) continue;
+      // The changes the node must emit: per tick the last value of each pair,
+      // when it differs from the value emitted before, at the last frame.
+      std::map<std::pair<uint32_t, uint32_t>, float> emitted;
+      std::vector<Record> wanted;
+      for (uint32_t t = 0; t < simulation->num_ticks; ++t) {
+        const AudScriptSimulationTick& tick = simulation->ticks[t];
+        AUD_CHECK(tick.status == AUD_SCRIPT_TICK_OK);
+        AUD_CHECK(tick.num_sends == 12);
+        std::map<std::pair<uint32_t, uint32_t>, float> last;
+        std::vector<std::pair<uint32_t, uint32_t>> order;
+        for (uint32_t s = 0; s < tick.num_sends; ++s) {
+          const AudScriptSimulationSend& send =
+              simulation->sends[tick.first_send + s];
+          const auto pair = std::make_pair(send.output, send.id);
+          if (last.find(pair) == last.end()) order.push_back(pair);
+          last[pair] = static_cast<float>(send.value);
+        }
+        for (const auto& pair : order) {
+          const auto found = emitted.find(pair);
+          if (found != emitted.end() && found->second == last[pair]) continue;
+          emitted[pair] = last[pair];
+          Record record;
+          record.block = tick.tick;
+          record.offset = kSafeFrames - 1;
+          record.port = pair.first;
+          record.id = pair.second;
+          record.value = last[pair];
+          wanted.push_back(record);
+        }
       }
-      for (const auto& pair : order) {
-        const auto found = emitted.find(pair);
-        if (found != emitted.end() && found->second == last[pair]) continue;
-        emitted[pair] = last[pair];
-        Record record;
-        record.block = tick.tick;
-        record.offset = kSafeFrames - 1;
-        record.port = pair.first;
-        record.id = pair.second;
-        record.value = last[pair];
-        wanted.push_back(record);
-      }
+      AUD_CHECK(wanted.size() > 1000);
+      AUD_CHECK(records == wanted);
+      aud_audio_script_simulation_free(simulation);
     }
-    AUD_CHECK(wanted.size() > 1000);
-    AUD_CHECK(records == wanted);
-    aud_audio_script_simulation_free(simulation);
-  }
 }
 
 // ############################################################################

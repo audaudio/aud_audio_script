@@ -167,24 +167,37 @@ g             = floor((b0 + beatsPerBlock) / d) * d     // aud.time.beat
 k             = floor((g - b0) * 60 / T * sr)           // 0 when k >= N
 ```
 
-and `g = b0`, `k = 0` while the transport stands. At the end of block n
-the audio thread hands the worker the request for block n + 1 - its beat
-predicted from the transport of block n - with the input events of block
-n, and posts the worker's semaphore. The worker runs the newest request,
-puts the values into a ring, and block n + 1 emits them: per output in
-ramp mode (the default) one event at the last frame, which a sampler turns
-into a line over the block; in step mode the old value at k - 1 and the
-new one at k. Block 0 has no tick.
+and `g = b0`, `k = 0` while the transport stands. The worker computes
+`lookahead` blocks ahead, L (1 to 4, default 2): at the end of block n
+the audio thread hands it the request for block n + L - its beat predicted
+from the transport at the end of block n plus L - 1 blocks of the same
+size and tempo - with the input events of block n, and posts the worker's
+semaphore. The first block requests blocks 1 to L at once; block 0 has no
+tick. The worker runs the requests in order, each once - scripts keep
+state -, and puts the values into a ring of results in the order of their
+blocks; block n + L emits them: per output in ramp mode (the default) one
+event at the last frame, which a sampler turns into a line over the block;
+in step mode the old value at k - 1 and the new one at k. So the worker
+has L - 1 blocks of slack: audio callbacks that come back to back after a
+late one still find their values. The input events of block n reach the
+tick of block n + L.
 
-When the values of a block are late, nothing is emitted, the late tick is
-counted, and the newest result that arrives later enters the next block -
-as a step at frame 0 or as a ramp. The worker always runs the newest
-request and counts the ones it skipped. An offline block
-(`AUD_PROCESS_OFFLINE`) waits for its result, with the RealtimeSanitizer
-off around that wait only, so offline renders are deterministic and never
-late. A load builds a new context on the worker and swaps it in before
-the first tick whose request came after the load; a failed load keeps the
-old context and ends the engine's load with the error.
+When the result of a block is not there, the block counts as late; the
+newest older result that arrived goes out instead - as a step at frame 0
+or as a ramp - and without one nothing is emitted and the samplers hold.
+Results of later blocks wait for their blocks. Only when more than L
+requests wait - the worker fell behind - it runs the newest one and counts
+the others as skipped. A change of the lookahead leaves no block without
+its tick: a larger one requests the blocks in between at once, a smaller
+one requests nothing until the requested blocks catch up; for the blocks
+of the change the input events reach the first tick requested after them.
+An offline block (`AUD_PROCESS_OFFLINE`) waits for its result, with the
+RealtimeSanitizer off around that wait only, so offline renders are
+deterministic, never late and equal to the simulation with the same
+lookahead. A load builds a new context on the worker and swaps it in
+before the first tick whose request came after the load - the L blocks
+requested before it still tick the old script; a failed load keeps the old
+context and ends the engine's load with the error.
 
 ### The engines
 
@@ -224,7 +237,8 @@ of service class user-interactive. The statistics tell where it runs.
   engine, `registerWith` for the host api of a graph.
 - `AudScriptModulator`: the type id, the event ids, the string settings
   (`script`, `script_name`, `engine`), the parameters (`mode0` to
-  `mode15`, `memory_limit`, `tick_budget`) with their descriptors,
+  `mode15`, `memory_limit`, `tick_budget`, `lookahead`) with their
+  descriptors,
   `engineAvailable`, `stats()` and `resetStats()` of the process-wide
   `AudScriptStats` - ticks, late ticks, skipped requests, aborted ticks,
   tick times with p50 and p99, the placement of the worker, the last load
@@ -232,7 +246,8 @@ of service class user-interactive. The statistics tell where it runs.
   resets them.
 - `AudScriptSimulation.simulate` runs a source on the host code of the
   worker without a graph and returns every `AudScriptTick` with its beat,
-  its frame k, its time and its `AudScriptSend`s.
+  its frame k, its time and its `AudScriptSend`s; with `lookahead` the
+  control changes reach the ticks as in a modulator with that lookahead.
 - `AudScriptBench.measure` times the ticks of a source on a worker placed
   like the node's, paced at the block duration or back to back, and
   returns an `AudScriptBenchResult`: mean, p50, p99 and maximum in µs, the

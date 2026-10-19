@@ -9,26 +9,33 @@
 // the values the script sends as AUD_EVENT_CONTROL events on its 16 event
 // outputs.
 //
-// The audio thread of block n:
+// The audio thread of block n, with the lookahead L (the parameter
+// `lookahead`, 2 by default):
 //
-// 1. stages the input events of block n - MIDI control changes and
-//    numeric controls of its event input - for the worker;
-// 2. takes the newest result of the worker: the result for block n is on
-//    time and enters the block at the grid point (step) or as a ramp; an
-//    older one arrived late and enters as a step at frame 0 or as a ramp;
-//    without the result for block n the block counts as late, and the
-//    samplers hold. An offline block waits for its result;
-// 3. publishes the staged events with the request for block n + 1, its
-//    beat predicted from the transport of block n, and posts the worker's
-//    semaphore - the one system call of the audio thread, which never
-//    blocks.
+// 1. applies the parameter events of the block, so that a new lookahead
+//    counts from this block on;
+// 2. stages the requests of the blocks before n + L that are not requested
+//    yet - blocks 1 to L - 1 at the first block, the blocks a larger
+//    lookahead adds -, then the input events of block n - MIDI control
+//    changes and numeric controls of its event input - for the worker;
+// 3. takes the result of block n from the results that wait in order:
+//    the result of block n is on time and enters the block at the grid
+//    point (step) or as a ramp; without it the newest older result arrived
+//    late and enters as a step at frame 0 or as a ramp, the block counts
+//    as late, and without any the samplers hold. Older results go; newer
+//    ones wait for their blocks. An offline block waits for its result;
+// 4. publishes the staged entries with the request of block n + L, its
+//    beat predicted from the transport at the end of block n plus L - 1
+//    blocks, and posts the worker's semaphore - the one system call of
+//    the audio thread, which never blocks.
 //
-// The worker runs the newest request only and counts the skipped ones; it
-// delivers every event before the tick, in order. Loads arrive from the
-// control thread under a mutex the audio thread never takes; the worker
-// builds the context and swaps it in before the first tick whose request
-// the audio thread issued after the load, so that an offline render that
-// follows a load always ticks the new script.
+// The worker runs the pending requests in order, each once, with the
+// events that came before each; only when more than L requests wait - it
+// fell behind - it runs the newest one and counts the others as skipped.
+// Loads arrive from the control thread under a mutex the audio thread
+// never takes; the worker builds the context and swaps it in before the
+// first tick whose request the audio thread issued after the load, so that
+// an offline render that follows a load always ticks the new script.
 
 #ifndef AUD_SCRIPT_NODE_HPP
 #define AUD_SCRIPT_NODE_HPP
@@ -61,8 +68,8 @@ struct AudScriptEntry {
   uint32_t number = 0;
   uint32_t frames = 0;
   double value = 0;
-  // A request: the block, its predicted beat, the transport, the budget
-  // and the memory limit.
+  // A request: the block, its predicted beat, the transport, the budget,
+  // the memory limit and the lookahead.
   uint64_t tick = 0;
   double b0 = 0;
   double tempo = 0;
@@ -70,7 +77,7 @@ struct AudScriptEntry {
   uint32_t playing = 0;
   uint32_t budgetMs = 0;
   uint32_t memoryMb = 0;
-  uint32_t reserved = 0;
+  uint32_t lookahead = 1;
 };
 
 // A result of the worker: the values of the context for a block.
@@ -94,9 +101,11 @@ struct AudScriptLoadCommand {
 
 class AudScriptNode {
  public:
-  // The entries of the ring to the worker and the results in flight.
+  // The entries of the ring to the worker and the results in flight: more
+  // than the largest lookahead plus one.
   static constexpr size_t kRingEntries = 2048;
   static constexpr size_t kResults = 8;
+  static constexpr uint32_t kMaxLookahead = 4;
 
   // [control] Creates a node and starts its worker; nullptr when memory or
   // the thread is refused.
@@ -120,7 +129,7 @@ class AudScriptNode {
   void setParam(uint32_t index, float value);
 
   // [realtime] Renders a block: emits the values of the worker, hands it
-  // the request of the next block.
+  // the request of the block `lookahead` blocks ahead.
   void process(const AudProcessContext& context);
 
   // [control] Applies a string setting.
@@ -134,13 +143,28 @@ class AudScriptNode {
   // ..........................................................................
   // The audio thread
 
+  // Where the transport stands at the end of a block, for the prediction
+  // of the requests.
+  struct Prediction {
+    double endBeat = 0;
+    double beatsPerBlock = 0;
+    double tempo = 120;
+    bool playing = false;
+  };
+
+  Prediction predict(const AudProcessContext& context) const;
+  void stageRequest(uint64_t block, const Prediction& prediction,
+                    const AudProcessContext& context, uint32_t lookahead);
   void stageEvent(const AudEvent& event);
   void stage(const AudScriptEntry& entry);
+  // The result of block `tick`, or the newest older one; drops the older
+  // ones; nullptr without one.
+  const AudScriptResult* takeResult(uint64_t tick);
   void emit(const AudScriptResult& result, bool onTime, uint32_t frames);
   void emitOne(uint32_t output, uint32_t id, float value, uint32_t offset);
-  // The newest result for `tick` or later, waiting up to the offline
-  // timeout; the newest one when it times out.
-  const AudScriptResult* waitForResult(uint64_t tick);
+  // Waits until a result for `tick` or later is there, up to the offline
+  // timeout.
+  void waitForResult(uint64_t tick);
   bool stepMode(uint32_t output) const;
 
   // ..........................................................................
@@ -151,14 +175,18 @@ class AudScriptNode {
   // Builds the loads that wait; the newest built one becomes pending.
   void takeLoads();
   void endLoad(int32_t id, int32_t result, const char* message);
+  // Runs the tick of a request with the inputs that came before it.
+  void runRequest(const AudScriptEntry& request);
   void publish(uint64_t tick, uint32_t offset);
   void measureMemory(bool force);
 
   const AudHostApi* host_;
   std::atomic<float> params_[AUD_SCRIPT_NUM_PARAMS];
 
-  // The audio thread's.
+  // The audio thread's: the block being rendered, the last block
+  // requested, the events without room.
   uint64_t block_ = 0;
+  uint64_t requested_ = 0;
   uint64_t dropped_ = 0;
   // The value each (output, id) pair emitted last, and whether it did.
   std::vector<float> emittedValues_;
@@ -192,6 +220,7 @@ class AudScriptNode {
   std::unique_ptr<AudScriptState> pending_;
   uint64_t pendingAfter_ = 0;
   std::vector<AudScriptInput> inputs_;
+  std::vector<AudScriptEntry> batch_;
   AudScriptPlacement placement_;
   int64_t measuredNs_ = 0;
 

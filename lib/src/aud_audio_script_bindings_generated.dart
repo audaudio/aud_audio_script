@@ -73,8 +73,8 @@ external void aud_audio_script_reset_stats();
 /// worker and writes its result into `result`; AUD_OK,
 /// AUD_ERROR_INVALID_ARGUMENT for a missing or short struct, no source, no
 /// frames, a sample rate outside 8 to 384 kHz, a tempo outside 1 to 999
-/// BPM, more than 1000000 blocks or events out of range,
-/// AUD_ERROR_UNSUPPORTED for an engine the platform lacks, or
+/// BPM, more than 1000000 blocks, a lookahead above 4 or events out of
+/// range, AUD_ERROR_UNSUPPORTED for an engine the platform lacks, or
 /// AUD_ERROR_OUT_OF_MEMORY.
 @ffi.Native<
   ffi.Int32 Function(
@@ -126,7 +126,9 @@ const int AUD_SCRIPT_NUM_KEYS = 3;
 
 const int AUD_SCRIPT_NUM_OUTPUTS = 16;
 
-const int AUD_SCRIPT_NUM_PARAMS = 18;
+const int AUD_SCRIPT_NUM_PARAMS = 19;
+
+const int AUD_SCRIPT_PARAM_LOOKAHEAD = 18;
 
 const int AUD_SCRIPT_PARAM_MEMORY_LIMIT = 16;
 
@@ -387,7 +389,8 @@ final class AudScriptSimulation extends ffi.Struct {
 /// transport that plays from beat 0 at `tempo`, `blocks` blocks of `frames`
 /// frames at `sample_rate`; block n starts at the beat n * beatsPerBlock.
 /// The control changes reach aud.onControlChange before the tick of the
-/// block after theirs, in their order.
+/// block `lookahead` blocks after theirs, in their order, as in a modulator
+/// with that lookahead; the tick of block n stays the tick of block n.
 final class AudScriptSimulationRequest extends ffi.Struct {
   @ffi.Uint32()
   external int struct_size;
@@ -424,8 +427,9 @@ final class AudScriptSimulationRequest extends ffi.Struct {
   @ffi.Uint32()
   external int num_events;
 
+  /// 0: 1, the tick of the next block
   @ffi.Uint32()
-  external int reserved;
+  external int lookahead;
 
   external ffi.Pointer<AudScriptControlChange> events;
 
@@ -442,7 +446,7 @@ final class AudScriptSimulationRequest extends ffi.Struct {
     required int memory_limit_mb,
     required int tick_budget_ms,
     required int num_events,
-    required int reserved,
+    required int lookahead,
     required ffi.Pointer<AudScriptControlChange> events,
   }) => $allocator<AudScriptSimulationRequest>()
     ..ref.struct_size = struct_size
@@ -456,7 +460,7 @@ final class AudScriptSimulationRequest extends ffi.Struct {
     ..ref.memory_limit_mb = memory_limit_mb
     ..ref.tick_budget_ms = tick_budget_ms
     ..ref.num_events = num_events
-    ..ref.reserved = reserved
+    ..ref.lookahead = lookahead
     ..ref.events = events;
 }
 
@@ -604,8 +608,9 @@ final class AudScriptStats extends ffi.Struct {
   @ffi.Uint32()
   external int qos_class;
 
+  /// The lookahead in blocks of the last block a modulator rendered.
   @ffi.Uint32()
-  external int reserved;
+  external int lookahead;
 
   /// The last load: the creation of the runtime and the context, and the
   /// evaluation of the script, in µs.
@@ -641,7 +646,7 @@ final class AudScriptStats extends ffi.Struct {
     required int priority,
     required int cpus,
     required int qos_class,
-    required int reserved,
+    required int lookahead,
     required double context_create_us,
     required double load_us,
     required int memory_bytes,
@@ -664,7 +669,7 @@ final class AudScriptStats extends ffi.Struct {
     ..ref.priority = priority
     ..ref.cpus = cpus
     ..ref.qos_class = qos_class
-    ..ref.reserved = reserved
+    ..ref.lookahead = lookahead
     ..ref.context_create_us = context_create_us
     ..ref.load_us = load_us
     ..ref.memory_bytes = memory_bytes;

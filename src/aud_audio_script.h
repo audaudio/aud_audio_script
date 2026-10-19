@@ -13,11 +13,12 @@
 //
 // The node never runs JavaScript on the audio thread. At the end of the
 // process call of block n the audio thread hands the worker the request
-// for block n + 1 and the input events of block n through a lock-free
-// ring and signals a semaphore without blocking; the worker runs the tick
-// and puts the values into a second lock-free ring; the process call of
-// block n + 1 emits the values that changed. A late worker holds the
-// values; an offline render waits for it.
+// for block n + L - L the lookahead, 2 by default - and the input events
+// of block n through a lock-free ring and signals a semaphore without
+// blocking; the worker runs the ticks in order and puts the values into a
+// second lock-free ring; the process call of block n + L emits the values
+// that changed. A late worker holds the values; an offline render waits
+// for it.
 //
 // The tick grid, identical in the node, the simulation and every reference
 // of it: for a block that starts at the beat b0 with N frames at the
@@ -72,7 +73,16 @@ enum {
   // that runs longer is interrupted and counted as aborted; its values are
   // dropped.
   AUD_SCRIPT_PARAM_TICK_BUDGET = 17,
-  AUD_SCRIPT_NUM_PARAMS = 18,
+  // "lookahead": how many blocks ahead the worker computes, 1 to 4;
+  // default 2. At the end of block n the audio thread requests block
+  // n + lookahead, so the worker has lookahead - 1 blocks of slack, e.g.
+  // for callbacks that come back to back after a late one. The input events
+  // of block n reach the tick of block n + lookahead. The first block
+  // requests blocks 1 to lookahead at once; a larger lookahead requests the
+  // blocks up to it at once, a smaller one requests nothing until the
+  // blocks catch up: no block loses its tick when it changes.
+  AUD_SCRIPT_PARAM_LOOKAHEAD = 18,
+  AUD_SCRIPT_NUM_PARAMS = 19,
 };
 
 // How the values of an output enter the block.
@@ -170,7 +180,8 @@ typedef struct AudScriptStats {
   int32_t priority;
   uint64_t cpus;
   uint32_t qos_class;
-  uint32_t reserved;
+  // The lookahead in blocks of the last block a modulator rendered.
+  uint32_t lookahead;
   // The last load: the creation of the runtime and the context, and the
   // evaluation of the script, in µs.
   double context_create_us;
@@ -215,7 +226,8 @@ typedef struct AudScriptControlChange {
 // transport that plays from beat 0 at `tempo`, `blocks` blocks of `frames`
 // frames at `sample_rate`; block n starts at the beat n * beatsPerBlock.
 // The control changes reach aud.onControlChange before the tick of the
-// block after theirs, in their order.
+// block `lookahead` blocks after theirs, in their order, as in a modulator
+// with that lookahead; the tick of block n stays the tick of block n.
 typedef struct AudScriptSimulationRequest {
   uint32_t struct_size;
   uint32_t engine;  // AUD_SCRIPT_ENGINE_*
@@ -228,7 +240,7 @@ typedef struct AudScriptSimulationRequest {
   uint32_t memory_limit_mb;  // 0: 32
   uint32_t tick_budget_ms;   // 0: 100
   uint32_t num_events;
-  uint32_t reserved;
+  uint32_t lookahead;  // 0: 1, the tick of the next block
   const AudScriptControlChange* events;
 } AudScriptSimulationRequest;
 
@@ -285,8 +297,8 @@ typedef struct AudScriptSimulation {
 // worker and writes its result into `result`; AUD_OK,
 // AUD_ERROR_INVALID_ARGUMENT for a missing or short struct, no source, no
 // frames, a sample rate outside 8 to 384 kHz, a tempo outside 1 to 999
-// BPM, more than 1000000 blocks or events out of range,
-// AUD_ERROR_UNSUPPORTED for an engine the platform lacks, or
+// BPM, more than 1000000 blocks, a lookahead above 4 or events out of
+// range, AUD_ERROR_UNSUPPORTED for an engine the platform lacks, or
 // AUD_ERROR_OUT_OF_MEMORY.
 AUD_EXPORT int32_t aud_audio_script_simulate(
     const AudScriptSimulationRequest* request, AudScriptSimulation** result);

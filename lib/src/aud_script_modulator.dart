@@ -97,6 +97,14 @@ abstract final class AudScriptModulator {
   /// longer is interrupted and counted as aborted; its values are dropped.
   static const String tickBudget = 'tick_budget';
 
+  /// How many blocks ahead the worker computes, 1 to 4; default 2. At the
+  /// end of block n the node requests block n + lookahead, so the worker
+  /// has lookahead - 1 blocks of slack, e.g. for audio callbacks that come
+  /// back to back after a late one; the input events of block n reach the
+  /// tick of block n + lookahead. A change leaves no block without its
+  /// tick.
+  static const String lookahead = 'lookahead';
+
   /// The parameter ids in the order of their indices.
   static const List<String> params = [
     'mode0',
@@ -117,6 +125,7 @@ abstract final class AudScriptModulator {
     'mode15',
     memoryLimit,
     tickBudget,
+    lookahead,
   ];
 
   /// The parameters as the node declares them, in the order of their
@@ -149,6 +158,16 @@ abstract final class AudScriptModulator {
       defaultValue: 100,
       stepped: true,
       steps: 10000,
+    ),
+    const AudParamDescriptor(
+      id: lookahead,
+      name: 'Lookahead',
+      unit: 'blocks',
+      min: 1,
+      max: 4,
+      defaultValue: 2,
+      stepped: true,
+      steps: 4,
     ),
   ];
 
@@ -186,6 +205,7 @@ abstract final class AudScriptModulator {
       priority: s.priority,
       cpus: s.cpus,
       qosClass: s.qos_class,
+      lookahead: s.lookahead,
       contextCreateUs: s.context_create_us,
       loadUs: s.load_us,
       memoryBytes: s.memory_bytes,

@@ -50,6 +50,7 @@ void main() {
         for (var i = 0; i < 16; ++i) AudScriptModulator.mode(i),
         AudScriptModulator.memoryLimit,
         AudScriptModulator.tickBudget,
+        AudScriptModulator.lookahead,
       ]);
     });
 
@@ -66,7 +67,11 @@ void main() {
         );
         expect(
           descriptors.map((p) => (p.id, p.min, p.max, p.defaultValue)).skip(16),
-          [('memory_limit', 1, 1024, 32), ('tick_budget', 1, 10000, 100)],
+          [
+            ('memory_limit', 1, 1024, 32),
+            ('tick_budget', 1, 10000, 100),
+            ('lookahead', 1, 4, 2),
+          ],
         );
       });
     });
@@ -97,6 +102,7 @@ void main() {
         expect(stats.ticks, greaterThanOrEqualTo(19));
         expect(stats.lateTicks, 0);
         expect(stats.abortedTicks, 0);
+        expect(stats.lookahead, 2);
         expect(stats.loads, 1);
         expect(stats.failedLoads, 0);
         expect(stats.engine, AudScriptEngine.quickjs);

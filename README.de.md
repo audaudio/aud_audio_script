@@ -175,25 +175,40 @@ g             = floor((b0 + beatsPerBlock) / d) * d     // aud.time.beat
 k             = floor((g - b0) * 60 / T * sr)           // 0 bei k >= N
 ```
 
-und `g = b0`, `k = 0`, solange der Transport steht. Am Ende von Block n
-übergibt der Audio-Thread dem Worker die Anfrage für Block n + 1 - ihr Beat
-aus dem Transport von Block n vorhergesagt - mit den Eingangs-Events von
-Block n und signalisiert die Semaphore des Workers. Der Worker führt die
-neueste Anfrage aus und legt die Werte in einen Ring; Block n + 1 sendet
-sie: pro Ausgang im Rampenmodus (Standard) ein Event am letzten Frame,
-das ein Sampler zu einer Linie über den Block macht; im Sprungmodus der
-alte Wert bei k - 1 und der neue bei k. Block 0 hat keinen Tick.
+und `g = b0`, `k = 0`, solange der Transport steht. Der Worker rechnet
+`lookahead` Blöcke voraus, L (1 bis 4, Standard 2): Am Ende von Block n
+übergibt der Audio-Thread ihm die Anfrage für Block n + L - ihr Beat aus
+dem Transport am Ende von Block n plus L - 1 Blöcke gleicher Größe und
+gleichen Tempos vorhergesagt - mit den Eingangs-Events von Block n und
+signalisiert die Semaphore des Workers. Der erste Block fragt die Blöcke 1
+bis L auf einmal an; Block 0 hat keinen Tick. Der Worker führt die
+Anfragen der Reihe nach aus, jede einmal - Skripte haben Zustand -, und
+legt die Werte in einen Ring von Ergebnissen in der Reihenfolge ihrer
+Blöcke; Block n + L sendet sie: pro Ausgang im Rampenmodus (Standard) ein
+Event am letzten Frame, das ein Sampler zu einer Linie über den Block
+macht; im Sprungmodus der alte Wert bei k - 1 und der neue bei k. So hat
+der Worker L - 1 Blöcke Spielraum: Audio-Callbacks, die nach einem späten
+direkt hintereinander kommen, finden ihre Werte trotzdem. Die
+Eingangs-Events von Block n erreichen den Tick von Block n + L.
 
-Sind die Werte eines Blocks zu spät, wird nichts gesendet, der späte Tick
-gezählt, und das neueste Ergebnis, das später eintrifft, geht in den
-nächsten Block ein - als Sprung bei Frame 0 oder als Rampe. Der Worker
-führt immer die neueste Anfrage aus und zählt die übersprungenen. Ein
-Offline-Block (`AUD_PROCESS_OFFLINE`) wartet auf sein Ergebnis, mit dem
-RealtimeSanitizer nur um dieses Warten herum aus, sodass Offline-Renderings
-deterministisch und nie zu spät sind. Ein Load baut einen neuen Kontext
+Fehlt das Ergebnis eines Blocks, zählt der Block als spät; das neueste
+ältere Ergebnis, das eingetroffen ist, geht stattdessen hinaus - als
+Sprung bei Frame 0 oder als Rampe -, und ohne eines wird nichts gesendet,
+und die Sampler halten ihre Werte. Ergebnisse späterer Blöcke warten auf
+ihre Blöcke. Nur wenn mehr als L Anfragen warten - der Worker ist in
+Rückstand -, führt er die neueste aus und zählt die anderen als
+übersprungen. Eine Änderung des Lookaheads lässt keinen Block ohne seinen
+Tick: Ein größerer fragt die Blöcke dazwischen auf einmal an, ein
+kleinerer fragt nichts an, bis die angefragten Blöcke aufgeholt sind; für
+die Blöcke der Änderung erreichen die Eingangs-Events den ersten danach
+angefragten Tick. Ein Offline-Block (`AUD_PROCESS_OFFLINE`) wartet auf
+sein Ergebnis, mit dem RealtimeSanitizer nur um dieses Warten herum aus,
+sodass Offline-Renderings deterministisch, nie zu spät und gleich der
+Simulation mit demselben Lookahead sind. Ein Load baut einen neuen Kontext
 auf dem Worker und tauscht ihn vor dem ersten Tick ein, dessen Anfrage nach
-dem Load kam; ein fehlgeschlagener Load behält den alten Kontext und
-beendet den Load der Engine mit dem Fehler.
+dem Load kam - die L vorher angefragten Blöcke ticken noch das alte
+Skript; ein fehlgeschlagener Load behält den alten Kontext und beendet den
+Load der Engine mit dem Fehler.
 
 ### Die Engines
 
@@ -237,7 +252,8 @@ user-interactive. Die Statistiken sagen, wo er läuft.
   `registerWith` für die Host-API eines Graphen.
 - `AudScriptModulator`: die Typ-Id, die Event-Ids, die String-Einstellungen
   (`script`, `script_name`, `engine`), die Parameter (`mode0` bis
-  `mode15`, `memory_limit`, `tick_budget`) mit ihren Deskriptoren,
+  `mode15`, `memory_limit`, `tick_budget`, `lookahead`) mit ihren
+  Deskriptoren,
   `engineAvailable`, `stats()` und `resetStats()` der prozessweiten
   `AudScriptStats` - Ticks, späte Ticks, übersprungene Anfragen,
   abgebrochene Ticks, Tick-Zeiten mit p50 und p99, die Platzierung des
@@ -245,7 +261,9 @@ user-interactive. Die Statistiken sagen, wo er läuft.
   Konsolenzeilen; die Engine setzt sie nie zurück.
 - `AudScriptSimulation.simulate` führt eine Quelle auf dem Host-Code des
   Workers ohne Graph aus und liefert jeden `AudScriptTick` mit seinem Beat,
-  seinem Frame k, seiner Zeit und seinen `AudScriptSend`s.
+  seinem Frame k, seiner Zeit und seinen `AudScriptSend`s; mit `lookahead`
+  erreichen die Control-Changes die Ticks wie in einem Modulator mit
+  diesem Lookahead.
 - `AudScriptBench.measure` misst die Ticks einer Quelle auf einem Worker,
   der wie der des Knotens platziert ist, im Takt der Blockdauer oder direkt
   hintereinander, und liefert ein `AudScriptBenchResult`: Mittelwert, p50,

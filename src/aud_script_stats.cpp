@@ -90,6 +90,7 @@ void AudScriptGlobalStats::read(AudScriptStats* stats) const {
   s.priority = priority_.load(std::memory_order_relaxed);
   s.cpus = cpus_.load(std::memory_order_relaxed);
   s.qos_class = qos_.load(std::memory_order_relaxed);
+  s.lookahead = lookahead_.load(std::memory_order_relaxed);
   s.memory_bytes = memory_.load(std::memory_order_relaxed);
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -128,6 +129,7 @@ void AudScriptGlobalStats::reset() {
   loads_.store(0, std::memory_order_relaxed);
   failedLoads_.store(0, std::memory_order_relaxed);
   memory_.store(0, std::memory_order_relaxed);
+  lookahead_.store(0, std::memory_order_relaxed);
   histogram_.reset();
   std::lock_guard<std::mutex> lock(mutex_);
   tickSumUs_ = 0;

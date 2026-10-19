@@ -161,19 +161,20 @@ AUD_TEST(the_batch_ring_publishes_whole_batches) {
   AUD_CHECK(ring.room() == 3);
 }
 
-AUD_TEST(the_slot_ring_hands_out_the_newest_slot) {
+AUD_TEST(the_slot_ring_hands_out_its_slots_in_order) {
   AudScriptSlotRing<int, 2> ring;
-  AUD_CHECK(ring.newest() == nullptr);
+  AUD_CHECK(ring.size() == 0);
   *ring.writeSlot() = 1;
   ring.commit();
   *ring.writeSlot() = 2;
   ring.commit();
   AUD_CHECK(ring.writeSlot() == nullptr);
-  const int* newest = ring.newest();
-  AUD_CHECK(newest != nullptr && *newest == 2);
+  AUD_CHECK(ring.size() == 2 && *ring.at(0) == 1 && *ring.at(1) == 2);
+  ring.pop();
+  AUD_CHECK(ring.size() == 1 && *ring.at(0) == 2);
   AUD_CHECK(ring.writeSlot() != nullptr);
-  ring.release();
-  AUD_CHECK(ring.newest() == nullptr);
+  ring.pop();
+  AUD_CHECK(ring.size() == 0);
 }
 
 // ############################################################################
@@ -369,6 +370,40 @@ AUD_TEST(the_simulation_reports_a_failed_load) {
   AUD_CHECK(result->num_ticks == 0);
   AUD_CHECK(std::string(result->error).find("broken.js: TypeError: no") == 0);
   aud_audio_script_simulation_free(result);
+}
+
+AUD_TEST(the_simulation_delivers_events_a_lookahead_later) {
+  const std::string script =
+      "var seen = 0;\n"
+      "aud.onControlChange = function () { ++seen; };\n"
+      "aud.onTick = function () { aud.send(0, 0, seen); };\n";
+  const std::vector<AudScriptControlChange> events = {{10, 0, 1, 1, 0},
+                                                      {300, 0, 1, 1, 0}};
+  for (const uint32_t lookahead : {0u, 1u, 3u}) {
+    AudScriptSimulation* result =
+        simulate(script, 48000, 128, 120, 8, events, AUD_SCRIPT_ENGINE_QUICKJS,
+                 lookahead);
+    AUD_CHECK(result != nullptr);
+    if (result == nullptr) continue;
+    // Block 0 and block 2 hold the events.
+    const uint32_t l = lookahead > 0 ? lookahead : 1;
+    for (uint32_t t = 0; t < result->num_ticks; ++t) {
+      const uint32_t tick = result->ticks[t].tick;
+      const double wanted = (tick >= l ? 1 : 0) + (tick >= 2 + l ? 1 : 0);
+      AUD_CHECK(result->sends[result->ticks[t].first_send].value == wanted);
+    }
+    aud_audio_script_simulation_free(result);
+  }
+  AudScriptSimulationRequest request{};
+  request.struct_size = sizeof(AudScriptSimulationRequest);
+  request.source = "";
+  request.sample_rate = 48000;
+  request.tempo = 120;
+  request.frames = 128;
+  request.lookahead = 5;
+  AudScriptSimulation* refused = nullptr;
+  AUD_CHECK(aud_audio_script_simulate(&request, &refused) ==
+            AUD_ERROR_INVALID_ARGUMENT);
 }
 
 AUD_TEST(the_simulation_runs_the_ticks_of_a_script) {
@@ -738,7 +773,10 @@ AUD_TEST(takes_midi_2_and_numeric_controls_and_parameter_events) {
       aud_event_param(AUD_SCRIPT_PARAM_MODE0, 1, 0, 6),
       aud_event_param(99, 1, 0, 6),
   };
+  // The events of block 0 reach the tick of block 2, the lookahead.
   bare.process(64, AUD_PROCESS_OFFLINE, events);
+  bare.process(64, AUD_PROCESS_OFFLINE);
+  AUD_CHECK(host.events.empty());
   bare.process(64, AUD_PROCESS_OFFLINE);
   std::vector<float> values;
   for (const AudEvent& event : host.events) {
