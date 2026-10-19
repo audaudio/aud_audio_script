@@ -10,7 +10,7 @@
 // outputs.
 //
 // The audio thread of block n, with the lookahead L (the parameter
-// `lookahead`, 2 by default):
+// `lookahead`, 3 by default):
 //
 // 1. applies the parameter events of the block, so that a new lookahead
 //    counts from this block on;

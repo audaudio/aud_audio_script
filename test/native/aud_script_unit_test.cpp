@@ -755,8 +755,9 @@ AUD_TEST(takes_midi_2_and_numeric_controls_and_parameter_events) {
       aud_event_param(AUD_SCRIPT_PARAM_MODE0, 1, 0, 6),
       aud_event_param(99, 1, 0, 6),
   };
-  // The events of block 0 reach the tick of block 2, the lookahead.
+  // The events of block 0 reach the tick of block 3, the lookahead.
   bare.process(64, AUD_PROCESS_OFFLINE, events);
+  bare.process(64, AUD_PROCESS_OFFLINE);
   bare.process(64, AUD_PROCESS_OFFLINE);
   AUD_CHECK(host.events.empty());
   bare.process(64, AUD_PROCESS_OFFLINE);

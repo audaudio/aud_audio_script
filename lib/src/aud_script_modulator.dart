@@ -93,8 +93,10 @@ abstract final class AudScriptModulator {
   /// longer is interrupted and counted as aborted; its values are dropped.
   static const String tickBudget = 'tick_budget';
 
-  /// How many blocks ahead the worker computes, 1 to 4; default 2. At the
-  /// end of block n the node requests block n + lookahead, so the worker
+  /// How many blocks ahead the worker computes, 1 to 4; default 3: on a
+  /// slow Android device with the vendor's core control, a worker on any
+  /// core three blocks ahead had no late tick in 10 minutes. At the end of
+  /// block n the node requests block n + lookahead, so the worker
   /// has lookahead - 1 blocks of slack, e.g. for audio callbacks that come
   /// back to back after a late one; the input events of block n reach the
   /// tick of block n + lookahead. A change leaves no block without its
@@ -167,7 +169,7 @@ abstract final class AudScriptModulator {
       unit: 'blocks',
       min: 1,
       max: 4,
-      defaultValue: 2,
+      defaultValue: 3,
       stepped: true,
       steps: 4,
     ),

@@ -58,7 +58,7 @@ const AudParamDescriptor kParams[AUD_SCRIPT_NUM_PARAMS] = {
     {sizeof(AudParamDescriptor), "tick_budget", "Tick budget", "ms", 1.0f,
      10000.0f, 100.0f, kStepped, 10000, 0},
     {sizeof(AudParamDescriptor), "lookahead", "Lookahead", "blocks", 1.0f, 4.0f,
-     2.0f, kStepped, 4, 0},
+     3.0f, kStepped, 4, 0},
     {sizeof(AudParamDescriptor), "worker_cores", "Worker cores", "", 0.0f, 1.0f,
      0.0f, kStepped, 2, 0},
 };

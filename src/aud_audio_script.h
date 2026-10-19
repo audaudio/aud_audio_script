@@ -13,7 +13,7 @@
 //
 // The node never runs JavaScript on the audio thread. At the end of the
 // process call of block n the audio thread hands the worker the request
-// for block n + L - L the lookahead, 2 by default - and the input events
+// for block n + L - L the lookahead, 3 by default - and the input events
 // of block n through a lock-free ring and signals a semaphore without
 // blocking; the worker runs the ticks in order and puts the values into a
 // second lock-free ring; the process call of block n + L emits the values
@@ -74,7 +74,9 @@ enum {
   // dropped.
   AUD_SCRIPT_PARAM_TICK_BUDGET = 17,
   // "lookahead": how many blocks ahead the worker computes, 1 to 4;
-  // default 2. At the end of block n the audio thread requests block
+  // default 3: on a slow Android device with the vendor's core control, a
+  // worker on any core three blocks ahead had no late tick in 10 minutes.
+  // At the end of block n the audio thread requests block
   // n + lookahead, so the worker has lookahead - 1 blocks of slack, e.g.
   // for callbacks that come back to back after a late one. The input events
   // of block n reach the tick of block n + lookahead. The first block

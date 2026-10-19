@@ -71,7 +71,7 @@ void main() {
           [
             ('memory_limit', 1, 1024, 32),
             ('tick_budget', 1, 10000, 100),
-            ('lookahead', 1, 4, 2),
+            ('lookahead', 1, 4, 3),
             ('worker_cores', 0, 1, 0),
           ],
         );
@@ -91,7 +91,7 @@ void main() {
         expect(stats.ticks, greaterThanOrEqualTo(19));
         expect(stats.lateTicks, 0);
         expect(stats.abortedTicks, 0);
-        expect(stats.lookahead, 2);
+        expect(stats.lookahead, 3);
         expect(stats.workerCores, AudScriptWorkerCores.any);
         expect(stats.loads, 1);
         expect(stats.failedLoads, 0);

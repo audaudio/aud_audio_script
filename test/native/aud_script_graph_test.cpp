@@ -80,7 +80,7 @@ AUD_TEST(registers_the_modulator_with_an_engine_once) {
     AUD_CHECK(d->params[AUD_SCRIPT_PARAM_TICK_BUDGET].default_value == 100);
     AUD_CHECK(std::strcmp(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].id,
                           "lookahead") == 0);
-    AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].default_value == 2);
+    AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].default_value == 3);
     AUD_CHECK(d->params[AUD_SCRIPT_PARAM_LOOKAHEAD].max_value == 4);
     AUD_CHECK(std::strcmp(d->params[AUD_SCRIPT_PARAM_WORKER_CORES].id,
                           "worker_cores") == 0);
@@ -131,9 +131,9 @@ AUD_TEST(ramps_a_new_value_to_the_last_frame_of_the_block) {
     AUD_CHECK(records[0].value == static_cast<float>(block / 1000.0));
   }
   const AudScriptStats s = stats();
-  // Ticks 10 and 11, the requests of the last block with the lookahead of
-  // 2, may have run too.
-  AUD_CHECK(s.ticks >= 9 && s.ticks <= 11);
+  // Ticks 10 to 12, the requests of the last blocks with the lookahead of
+  // 3, may have run too.
+  AUD_CHECK(s.ticks >= 9 && s.ticks <= 12);
   AUD_CHECK(s.late_ticks == 0);
   AUD_CHECK(s.loads == 1 && s.failed_loads == 0);
   AUD_CHECK(s.memory_bytes > 0);
@@ -231,17 +231,17 @@ AUD_TEST(a_new_context_starts_without_values_and_emits_what_differs) {
   AUD_CHECK(g.load("aud.send(0, 3, 0.75);\n"
                    "aud.onTick = function () { aud.send(0, 1, 0.25); };") ==
             AUD_OK);
-  g.renderOffline(3);
+  g.renderOffline(5);
   std::vector<std::tuple<int64_t, uint32_t, float>> got;
   for (const Record& record : Recorder::get().records) {
     got.emplace_back(record.block, record.id, record.value);
   }
-  // The blocks requested before the load - up to block 2 + lookahead 2 -
-  // tick the old script; block 5 is the first of the new one.
+  // The blocks requested before the load - up to block 2 + lookahead 3 -
+  // tick the old script; block 6 is the first of the new one.
   const std::vector<std::tuple<int64_t, uint32_t, float>> wanted = {
       {1, 1, 0.25f},
       {1, 2, 0.5f},
-      {5, 3, 0.75f},
+      {6, 3, 0.75f},
   };
   AUD_CHECK(got == wanted);
 }
@@ -580,7 +580,7 @@ AUD_TEST(an_exception_in_a_tick_aborts_it_and_reports_the_error) {
   for (const Record& record : Recorder::get().records)
     values.push_back(record.value);
   AUD_CHECK((values == std::vector<float>{1, 3}));
-  // Tick 6, requested by the last block with the lookahead of 2, may
+  // Tick 6, requested by the last blocks with the lookahead of 3, may
   // have run and thrown too.
   const uint64_t aborted = stats().aborted_ticks;
   AUD_CHECK(aborted == 2 || aborted == 3);

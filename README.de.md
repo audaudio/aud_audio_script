@@ -175,7 +175,7 @@ k             = floor((g - b0) * 60 / T * sr)           // 0 bei k >= N
 ```
 
 und `g = b0`, `k = 0`, solange der Transport steht. Der Worker rechnet
-`lookahead` Blöcke voraus, L (1 bis 4, Standard 2): Am Ende von Block n
+`lookahead` Blöcke voraus, L (1 bis 4, Standard 3): Am Ende von Block n
 übergibt der Audio-Thread ihm die Anfrage für Block n + L - ihr Beat aus
 dem Transport am Ende von Block n plus L - 1 Blöcke gleicher Größe und
 gleichen Tempos vorhergesagt - mit den Eingangs-Events von Block n und
@@ -188,7 +188,10 @@ Event am letzten Frame, das ein Sampler zu einer Linie über den Block
 macht; im Sprungmodus der alte Wert bei k - 1 und der neue bei k. So hat
 der Worker L - 1 Blöcke Spielraum: Audio-Callbacks, die nach einem späten
 direkt hintereinander kommen, finden ihre Werte trotzdem. Die
-Eingangs-Events von Block n erreichen den Tick von Block n + L.
+Eingangs-Events von Block n erreichen den Tick von Block n + L. Drei
+Blöcke sind der Standard, weil auf einem langsamen Android-Gerät mit dem
+Core-Control des Herstellers ein Worker auf jedem Kern drei Blöcke voraus
+in 10 Minuten dichten Spiels keinen späten Tick hatte.
 
 Fehlt das Ergebnis eines Blocks, zählt der Block als spät; das neueste
 ältere Ergebnis, das eingetroffen ist, geht stattdessen hinaus - als

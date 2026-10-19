@@ -167,7 +167,7 @@ k             = floor((g - b0) * 60 / T * sr)           // 0 when k >= N
 ```
 
 and `g = b0`, `k = 0` while the transport stands. The worker computes
-`lookahead` blocks ahead, L (1 to 4, default 2): at the end of block n
+`lookahead` blocks ahead, L (1 to 4, default 3): at the end of block n
 the audio thread hands it the request for block n + L - its beat predicted
 from the transport at the end of block n plus L - 1 blocks of the same
 size and tempo - with the input events of block n, and posts the worker's
@@ -179,7 +179,9 @@ event at the last frame, which a sampler turns into a line over the block;
 in step mode the old value at k - 1 and the new one at k. So the worker
 has L - 1 blocks of slack: audio callbacks that come back to back after a
 late one still find their values. The input events of block n reach the
-tick of block n + L.
+tick of block n + L. Three blocks are the default because on a slow Android
+device with the vendor's core control a worker on any core three blocks
+ahead had no late tick in 10 minutes of dense playing.
 
 When the result of a block is not there, the block counts as late; the
 newest older result that arrived goes out instead - as a step at frame 0
