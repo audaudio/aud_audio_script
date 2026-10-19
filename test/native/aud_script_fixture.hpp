@@ -29,6 +29,7 @@
 #include "aud_audio_graph.h"
 #include "aud_audio_script.h"
 #include "aud_test.hpp"
+#include "aud_transport.h"
 #include "aud_ump.h"
 
 namespace aud_script_test {
@@ -38,7 +39,7 @@ namespace aud_script_test {
 
 // A control event as the recorder saw it.
 struct Record {
-  int64_t block = 0;    // the block, sample position / block frames
+  int64_t block = 0;    // the block, counted from the first
   uint32_t offset = 0;  // the frame inside the block
   uint32_t port = 0;    // the input, the output of the modulator
   uint32_t id = 0;
@@ -49,11 +50,16 @@ struct Record {
   }
 };
 
-// The records of the recorder that rendered last. The vector is reserved
-// before the render, so that the audio thread only writes into it.
+// The records of the recorder that rendered last, and per block its frames
+// and the beat of the transport at its first frame. The vectors are
+// reserved before the render, so that the audio thread only writes into
+// them.
 struct Recorder {
   std::vector<Record> records;
+  std::vector<double> beats;
+  std::vector<uint32_t> frames;
   uint32_t blockFrames = 0;
+  int64_t block = 0;
   uint64_t overflow = 0;
   static Recorder& get() {
     static Recorder recorder;
@@ -62,7 +68,12 @@ struct Recorder {
   void clear(uint32_t frames) {
     records.clear();
     records.reserve(1 << 20);
+    beats.clear();
+    beats.reserve(1 << 16);
+    this->frames.clear();
+    this->frames.reserve(1 << 16);
     blockFrames = frames;
+    block = 0;
     overflow = 0;
   }
 };
@@ -86,15 +97,22 @@ inline void recorderProcess(void* instance, const AudProcessContext* context) {
       continue;
     }
     Record record;
-    record.block = recorder->blockFrames > 0
-                       ? context->sample_position / recorder->blockFrames
-                       : 0;
+    record.block = recorder->block;
     record.offset = event.sample_offset;
     record.port = event.port;
     record.id = event.words[0];
     std::memcpy(&record.value, &event.words[2], sizeof(float));
     recorder->records.push_back(record);
   }
+  const AudTransportSnapshot* transport = context->transport;
+  if (recorder->beats.size() < recorder->beats.capacity()) {
+    recorder->beats.push_back(
+        transport != nullptr && transport->num_segments > 0
+            ? aud_beats_from_ticks(transport->segments[0].beat)
+            : 0.0);
+    recorder->frames.push_back(context->frames);
+  }
+  recorder->block += 1;
 }
 
 #define AUD_TEST_RECORDER_INPUT(n) \
@@ -134,7 +152,8 @@ inline const AudNodeDescriptor& recorderDescriptor() {
     d.type_id = kRecorderTypeId;
     d.name = "Recorder";
     d.vendor = "Test";
-    d.capabilities = AUD_NODE_CAP_VARIABLE_BLOCK | AUD_NODE_CAP_EVENTS;
+    d.capabilities = AUD_NODE_CAP_VARIABLE_BLOCK | AUD_NODE_CAP_EVENTS |
+                     AUD_NODE_CAP_TRANSPORT;
     d.num_event_inputs = 16;
     d.event_inputs = inputs;
     d.vtable = &vtable;
@@ -273,6 +292,24 @@ struct Graph {
     request.struct_size = sizeof(AudOfflineRequest);
     request.frames = static_cast<uint32_t>(total);
     request.block_frames = frames;
+    request.outputs = &bus;
+    request.start_sample_position = aud_graph_sample_position(graph);
+    AUD_CHECK(aud_graph_render_offline(graph, &request) == AUD_OK);
+  }
+
+  // Renders `blocks` blocks offline in the cycle of `sizes`.
+  void renderOfflineSizes(uint32_t blocks, const std::vector<uint32_t>& sizes) {
+    size_t total = 0;
+    for (uint32_t b = 0; b < blocks; ++b) total += sizes[b % sizes.size()];
+    std::vector<std::vector<float>> out(channels, std::vector<float>(total));
+    std::vector<float*> pointers;
+    for (auto& channel : out) pointers.push_back(channel.data());
+    const AudAudioBus bus{sizeof(AudAudioBus), channels, pointers.data()};
+    AudOfflineRequest request{};
+    request.struct_size = sizeof(AudOfflineRequest);
+    request.frames = static_cast<uint32_t>(total);
+    request.num_block_sizes = static_cast<uint32_t>(sizes.size());
+    request.block_sizes = sizes.data();
     request.outputs = &bus;
     request.start_sample_position = aud_graph_sample_position(graph);
     AUD_CHECK(aud_graph_render_offline(graph, &request) == AUD_OK);

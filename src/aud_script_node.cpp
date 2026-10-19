@@ -269,8 +269,10 @@ bool AudScriptNode::stepMode(uint32_t output) const {
 }
 
 void AudScriptNode::stage(const AudScriptEntry& entry) {
-  // One entry stays free for the request of the block.
-  if (requests_.room() > 1) {
+  // Room stays for the request of this block and for those of the next
+  // one: as many as the largest lookahead, which a block requests at once
+  // after a larger lookahead.
+  if (requests_.room() > kMaxLookahead + 1) {
     requests_.stage(entry);
   } else {
     dropped_ += 1;
@@ -328,11 +330,33 @@ void AudScriptNode::emitOne(uint32_t output, uint32_t id, float value,
   host_->emit_event(host_->host, this, &event);
 }
 
+uint32_t AudScriptNode::gridOffset(const AudScriptResult& result,
+                                   const AudProcessContext& context) const {
+  if (result.playing == 0) return 0;
+  const AudTransportSnapshot* transport = context.transport;
+  if (transport == nullptr || transport->num_segments == 0 ||
+      transport->segments == nullptr) {
+    return 0;
+  }
+  const AudTransportSegment* segment = aud_transport_segment_at(transport, 0);
+  if (segment == nullptr || (segment->flags & AUD_SEGMENT_PLAYING) == 0) {
+    return 0;
+  }
+  // As the tick grid writes it, with b0 and T of this block.
+  const double b0 = aud_beats_from_ticks(segment->beat);
+  const double tempo = segment->tempo > 0 ? segment->tempo : result.tempo;
+  const double sr = context.sample_rate;
+  if (!(tempo > 0) || !(sr > 0)) return 0;
+  const double k = std::floor((result.beat - b0) * 60 / tempo * sr);
+  if (k >= static_cast<double>(context.frames) || !(k >= 0)) return 0;
+  return static_cast<uint32_t>(k);
+}
+
 void AudScriptNode::emit(const AudScriptResult& result, bool onTime,
-                         uint32_t frames) {
+                         uint32_t frames, uint32_t offset) {
   if (host_ == nullptr || host_->emit_event == nullptr) return;
   const uint32_t last = frames - 1;
-  const uint32_t k = onTime ? std::min(result.offset, last) : 0;
+  const uint32_t k = onTime ? std::min(offset, last) : 0;
   bool step[AUD_SCRIPT_NUM_OUTPUTS];
   for (uint32_t o = 0; o < AUD_SCRIPT_NUM_OUTPUTS; ++o) step[o] = stepMode(o);
   changed_.clear();
@@ -492,7 +516,9 @@ void AudScriptNode::process(const AudProcessContext& context) {
   bool onTime = false;
   if (result != nullptr) {
     onTime = result->tick == tick;
-    if (frames > 0) emit(*result, onTime, frames);
+    if (frames > 0) {
+      emit(*result, onTime, frames, onTime ? gridOffset(*result, context) : 0);
+    }
     results_.pop();
   }
   AudScriptGlobalStats& stats = AudScriptGlobalStats::get();
@@ -599,14 +625,17 @@ void AudScriptNode::takeLoads() {
   }
 }
 
-void AudScriptNode::publish(uint64_t tick, uint32_t offset) {
+void AudScriptNode::publish(const AudScriptBlock& block,
+                            const AudScriptGrid& grid) {
   AudScriptResult* slot = results_.writeSlot();
   if (slot == nullptr) {
     AudScriptGlobalStats::get().countSkipped(1);
     return;
   }
-  slot->tick = tick;
-  slot->offset = offset;
+  slot->tick = block.tick;
+  slot->beat = grid.beat;
+  slot->tempo = block.tempo;
+  slot->playing = block.playing ? 1 : 0;
   const AudScriptState* state = runner_.state();
   const uint32_t count = state != nullptr ? state->values.size() : 0;
   for (uint32_t i = 0; i < count; ++i) {
@@ -653,7 +682,7 @@ void AudScriptNode::runRequest(const AudScriptEntry& request) {
       runner_.runTick(block, inputs_.data(), inputs_.size(),
                       static_cast<int64_t>(request.budgetMs) * 1000000LL);
   inputs_.clear();
-  publish(request.tick, result.grid.offset);
+  publish(block, result.grid);
   if (result.ran) {
     AudScriptGlobalStats& stats = AudScriptGlobalStats::get();
     stats.countTick(result.timeUs, result.status);

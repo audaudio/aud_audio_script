@@ -80,10 +80,15 @@ struct AudScriptEntry {
   uint32_t lookahead = 1;
 };
 
-// A result of the worker: the values of the context for a block.
+// A result of the worker: the values of the context for a block, and the
+// grid point of its tick - the beat, the tempo and the transport state -,
+// from which the block that emits it finds the frame of the grid point in
+// its own transport.
 struct AudScriptResult {
   uint64_t tick = 0;
-  uint32_t offset = 0;
+  double beat = 0;
+  double tempo = 0;
+  uint32_t playing = 0;
   uint32_t count = 0;
   uint16_t outputs[AUD_SCRIPT_MAX_VALUES];
   uint16_t ids[AUD_SCRIPT_MAX_VALUES];
@@ -160,7 +165,13 @@ class AudScriptNode {
   // The result of block `tick`, or the newest older one; drops the older
   // ones; nullptr without one.
   const AudScriptResult* takeResult(uint64_t tick);
-  void emit(const AudScriptResult& result, bool onTime, uint32_t frames);
+  // The frame of the result's grid point in the block of `context`, as the
+  // tick grid computes it from the block's own transport: 0 when the
+  // transport stands or the point lies outside the block.
+  uint32_t gridOffset(const AudScriptResult& result,
+                      const AudProcessContext& context) const;
+  void emit(const AudScriptResult& result, bool onTime, uint32_t frames,
+            uint32_t offset);
   void emitOne(uint32_t output, uint32_t id, float value, uint32_t offset);
   // Waits until a result for `tick` or later is there, up to the offline
   // timeout.
@@ -177,7 +188,7 @@ class AudScriptNode {
   void endLoad(int32_t id, int32_t result, const char* message);
   // Runs the tick of a request with the inputs that came before it.
   void runRequest(const AudScriptEntry& request);
-  void publish(uint64_t tick, uint32_t offset);
+  void publish(const AudScriptBlock& block, const AudScriptGrid& grid);
   // Places the worker as "worker_cores" asks, when it changed.
   void place();
   void measureMemory(bool force);

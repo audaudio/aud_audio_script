@@ -27,14 +27,9 @@
 #include "aud_audio_script.h"
 #include "aud_clock.h"
 #include "aud_script_engine.hpp"
+#include "aud_script_heap.hpp"
 #include "aud_script_sync.hpp"
 #include "quickjs.h"
-
-#if __APPLE__
-#include <malloc/malloc.h>
-#elif _WIN32 || __linux__ || __ANDROID__
-#include <malloc.h>
-#endif
 
 namespace aud_script {
 namespace {
@@ -42,59 +37,25 @@ namespace {
 // ############################################################################
 // The counting allocator
 
-// The bytes a runtime holds from the system's allocator. A runtime runs on
-// one thread at a time, so a plain counter does.
-struct AudQuickJsHeap {
-  size_t bytes = 0;
-};
-
-// The usable size of a block of the system's allocator; 0 where the
-// platform does not tell, which leaves the count at 0.
-size_t usableSize(const void* block) {
-#if __APPLE__
-  return malloc_size(block);
-#elif _WIN32
-  return _msize(const_cast<void*>(block));
-#elif __linux__ || __ANDROID__
-  return malloc_usable_size(const_cast<void*>(block));
-#else
-  (void)block;
-  return 0;
-#endif
-}
-
 void* heapCalloc(void* opaque, size_t count, size_t size) {
-  void* block = std::calloc(count, size);
-  if (block != nullptr) {
-    static_cast<AudQuickJsHeap*>(opaque)->bytes += usableSize(block);
-  }
-  return block;
+  return static_cast<AudScriptHeap*>(opaque)->calloc(count, size);
 }
 
 void* heapMalloc(void* opaque, size_t size) {
-  void* block = std::malloc(size);
-  if (block != nullptr) {
-    static_cast<AudQuickJsHeap*>(opaque)->bytes += usableSize(block);
-  }
-  return block;
+  return static_cast<AudScriptHeap*>(opaque)->malloc(size);
 }
 
 void heapFree(void* opaque, void* block) {
-  if (block == nullptr) return;
-  static_cast<AudQuickJsHeap*>(opaque)->bytes -= usableSize(block);
-  std::free(block);
+  static_cast<AudScriptHeap*>(opaque)->free(block);
 }
 
 void* heapRealloc(void* opaque, void* block, size_t size) {
-  auto* heap = static_cast<AudQuickJsHeap*>(opaque);
-  const size_t old = block != nullptr ? usableSize(block) : 0;
-  void* moved = std::realloc(block, size);
-  // A failed realloc keeps the old block.
-  if (moved != nullptr) heap->bytes += usableSize(moved) - old;
-  return moved;
+  return static_cast<AudScriptHeap*>(opaque)->realloc(block, size);
 }
 
-size_t heapUsableSize(const void* block) { return usableSize(block); }
+size_t heapUsableSize(const void* block) {
+  return AudScriptHeap::usableSize(block);
+}
 
 const JSMallocFunctions kHeapFunctions = {heapCalloc, heapMalloc, heapFree,
                                           heapRealloc, heapUsableSize};
@@ -359,7 +320,7 @@ class AudQuickJsContext final : public AudScriptContext {
   AudScriptSink* sink_;
   // The count of the runtime's allocator; JS_FreeRuntime in the destructor
   // frees the runtime's last blocks through it.
-  AudQuickJsHeap heap_;
+  AudScriptHeap heap_;
   JSRuntime* rt_ = nullptr;
   JSContext* ctx_ = nullptr;
   JSValue aud_ = JS_UNDEFINED;

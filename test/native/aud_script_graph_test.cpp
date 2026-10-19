@@ -201,6 +201,62 @@ AUD_TEST(steps_from_the_old_to_the_new_value_at_the_grid_point) {
   }
 }
 
+AUD_TEST(steps_land_on_the_grid_point_in_blocks_of_varying_size) {
+  // Callbacks of 180, 192 and 204 frames, three blocks ahead: the request
+  // of a block predicts its beat from a block of another size, so the node
+  // finds the frame of the grid point in the transport of the block that
+  // emits it. The script tells the grid point exactly: its index j and the
+  // fractions F of its beat, g = j / F.
+  aud_audio_script_reset_stats();
+  const std::vector<uint32_t> sizes = {180, 192, 204};
+  Graph g(256, 48000);
+  g.param(AUD_SCRIPT_PARAM_MODE0 + 1, AUD_SCRIPT_MODE_STEP);
+  g.param(AUD_SCRIPT_PARAM_LOOKAHEAD, 3);
+  g.play(120);
+  AUD_CHECK(g.load("aud.onTick = function () {\n"
+                   "  var t = aud.time;\n"
+                   "  var f = Math.ceil(1 / (t.frames * t.tempo / 60 /"
+                   " t.sampleRate));\n"
+                   "  aud.send(1, 301, t.tick);\n"
+                   "  aud.send(2, 0, Math.round(t.beat * f));\n"
+                   "  aud.send(2, 1, f);\n"
+                   "};\n") == AUD_OK);
+  const uint32_t blocks = 240;
+  g.renderOfflineSizes(blocks, sizes);
+  const Recorder& recorder = Recorder::get();
+  AUD_CHECK(recorder.beats.size() == blocks);
+  double j = 0;
+  double f = 1;
+  uint32_t inside = 0;
+  for (int64_t block = 1; block < blocks; ++block) {
+    std::vector<Record> stepped;
+    for (const Record& record : recordsOf(block)) {
+      if (record.port == 2 && record.id == 0) j = record.value;
+      if (record.port == 2 && record.id == 1) f = record.value;
+      if (record.port == 1) stepped.push_back(record);
+    }
+    // The grid formula with the beat of this block.
+    const double grid = j * (1.0 / f);
+    const uint32_t frames = recorder.frames[block];
+    const double k =
+        std::floor((grid - recorder.beats[block]) * 60 / 120 * 48000.0);
+    const uint32_t wanted =
+        k >= frames || !(k >= 0) ? 0 : static_cast<uint32_t>(k);
+    AUD_CHECK(!stepped.empty());
+    if (stepped.empty()) continue;
+    AUD_CHECK(stepped.back().value == static_cast<float>(block));
+    AUD_CHECK(stepped.back().offset == wanted);
+    AUD_CHECK(stepped.back().offset < frames);
+    // The old value one frame before, once there is one.
+    if (wanted > 0 && block > 1) {
+      inside += 1;
+      AUD_CHECK(stepped.size() == 2 && stepped[0].offset == wanted - 1);
+    }
+  }
+  AUD_CHECK(inside > blocks / 2);
+  AUD_CHECK(stats().late_ticks == 0);
+}
+
 AUD_TEST(emits_a_value_only_when_it_changed) {
   aud_audio_script_reset_stats();
   Graph g(128);

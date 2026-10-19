@@ -185,7 +185,9 @@ Anfragen der Reihe nach aus, jede einmal - Skripte haben Zustand -, und
 legt die Werte in einen Ring von Ergebnissen in der Reihenfolge ihrer
 Blöcke; Block n + L sendet sie: pro Ausgang im Rampenmodus (Standard) ein
 Event am letzten Frame, das ein Sampler zu einer Linie über den Block
-macht; im Sprungmodus der alte Wert bei k - 1 und der neue bei k. So hat
+macht; im Sprungmodus der alte Wert bei k - 1 und der neue bei k, mit k
+aus dem Transport des Blocks bestimmt, der den Wert sendet, sodass ein
+Sprung auch bei wechselnden Blockgrößen auf dem Rasterpunkt liegt. So hat
 der Worker L - 1 Blöcke Spielraum: Audio-Callbacks, die nach einem späten
 direkt hintereinander kommen, finden ihre Werte trotzdem. Die
 Eingangs-Events von Block n erreichen den Tick von Block n + L. Drei
@@ -206,7 +208,10 @@ die Blöcke der Änderung erreichen die Eingangs-Events den ersten danach
 angefragten Tick. Ein Offline-Block (`AUD_PROCESS_OFFLINE`) wartet auf
 sein Ergebnis, mit dem RealtimeSanitizer nur um dieses Warten herum aus,
 sodass Offline-Renderings deterministisch, nie zu spät und gleich der
-Simulation mit demselben Lookahead sind. Ein Load baut einen neuen Kontext
+Simulation mit demselben Lookahead sind - ab dem ersten Offline-Block
+eines Graphen: Nach Live-Blöcken können die ersten `lookahead`
+Offline-Blöcke noch die Ticks verpassen, die der Worker live übersprungen
+hat (bekannt, nicht behoben). Ein Load baut einen neuen Kontext
 auf dem Worker und tauscht ihn vor dem ersten Tick ein, dessen Anfrage nach
 dem Load kam - die L vorher angefragten Blöcke ticken noch das alte
 Skript; ein fehlgeschlagener Load behält den alten Kontext und beendet den

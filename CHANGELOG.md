@@ -65,5 +65,15 @@
 - Add a lookahead of three blocks as the default
 
 - Raise the default of the parameter lookahead from 2 to 3 blocks
+
 - Explain it in the README: on a slow Android device with core control, any core and three blocks ahead gave no late tick in 10 minutes
+
 - Adapt the tests that rely on the default
+
+- Add steps on the real grid point and room for requests
+
+- Find the frame of a step's grid point in the transport of the block that emits it, so steps land on the grid point when blocks vary in size
+- Keep room in the request ring for this block's request and the next block's lookahead when input events flood it
+- Let the counting allocator free a block on realloc to 0 bytes
+- Document that offline renders are deterministic from the first offline block on
+- Test blocks of 180, 192 and 204 frames at lookahead 3, an event flood with a lookahead increase and the allocator

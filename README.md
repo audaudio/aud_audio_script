@@ -176,7 +176,9 @@ tick. The worker runs the requests in order, each once - scripts keep
 state -, and puts the values into a ring of results in the order of their
 blocks; block n + L emits them: per output in ramp mode (the default) one
 event at the last frame, which a sampler turns into a line over the block;
-in step mode the old value at k - 1 and the new one at k. So the worker
+in step mode the old value at k - 1 and the new one at k, with k found
+in the transport of the block that emits the value, so a step lands on
+the grid point also when the blocks vary in size. So the worker
 has L - 1 blocks of slack: audio callbacks that come back to back after a
 late one still find their values. The input events of block n reach the
 tick of block n + L. Three blocks are the default because on a slow Android
@@ -195,7 +197,9 @@ of the change the input events reach the first tick requested after them.
 An offline block (`AUD_PROCESS_OFFLINE`) waits for its result, with the
 RealtimeSanitizer off around that wait only, so offline renders are
 deterministic, never late and equal to the simulation with the same
-lookahead. A load builds a new context on the worker and swaps it in
+lookahead - from the first offline block of a graph on: after live
+blocks, the first `lookahead` offline blocks may still miss the ticks the
+worker skipped live (known, not fixed). A load builds a new context on the worker and swaps it in
 before the first tick whose request came after the load - the L blocks
 requested before it still tick the old script; a failed load keeps the old
 context and ends the engine's load with the error.

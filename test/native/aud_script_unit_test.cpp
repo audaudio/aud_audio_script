@@ -24,6 +24,7 @@
 
 #include "aud_script_engine.hpp"
 #include "aud_script_fixture.hpp"
+#include "aud_script_heap.hpp"
 #include "aud_script_node.hpp"
 #include "aud_script_placement.hpp"
 #include "aud_script_rings.hpp"
@@ -770,6 +771,66 @@ AUD_TEST(takes_midi_2_and_numeric_controls_and_parameter_events) {
     AUD_CHECK(event.sample_offset == 0);
   }
   AUD_CHECK((values == std::vector<float>{127, 15, 21, 30}));
+}
+
+AUD_TEST(a_flood_of_events_leaves_room_for_the_requests) {
+  // While the worker builds a slow load it drains nothing; four blocks of
+  // 700 events each fill the ring, and the fourth block raises the
+  // lookahead to 4: its four requests still find room, the events do not.
+  TestHost host;
+  Bare bare(&host.api);
+  bare.type.vtable->set_param(bare.node, AUD_SCRIPT_PARAM_LOOKAHEAD, 1);
+  const int32_t first =
+      bare.set(AUD_SCRIPT_KEY_SCRIPT,
+               "aud.onTick = function () { aud.send(0, 1, aud.time.tick); };");
+  AUD_CHECK(host.waitEnd(first) == AUD_OK);
+  aud_audio_script_reset_stats();
+  const int32_t slow =
+      bare.set(AUD_SCRIPT_KEY_SCRIPT,
+               "var start = Date.now(); while (Date.now() - start < 300) {}\n"
+               "aud.onTick = function () { aud.send(0, 1, aud.time.tick); };");
+  std::this_thread::sleep_for(std::chrono::milliseconds(30));
+  std::vector<AudEvent> flood;
+  for (uint32_t i = 0; i < 700; ++i) {
+    flood.push_back(aud_event_control_float(i % 512, 0.5f, i % 64, 0));
+  }
+  for (int block = 0; block < 3; ++block) bare.process(64, 0, flood);
+  bare.type.vtable->set_param(bare.node, AUD_SCRIPT_PARAM_LOOKAHEAD, 4);
+  bare.process(64, 0, flood);
+  AUD_CHECK(host.waitEnd(slow) == AUD_OK);
+  for (int i = 0; i < 5000 && stats().ticks == 0; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  AUD_CHECK(stats().dropped_events > 0);
+  // The worker ran the newest request, block 3 + 4: block 7 emits it.
+  host.events.clear();
+  for (int block = 4; block <= 7; ++block) bare.process(64, 0);
+  std::vector<float> values;
+  for (const AudEvent& event : host.events) {
+    float value = 0;
+    std::memcpy(&value, &event.words[2], sizeof(value));
+    values.push_back(value);
+  }
+  AUD_CHECK((values == std::vector<float>{7}));
+}
+
+AUD_TEST(the_counting_allocator_counts_what_it_holds) {
+  AudScriptHeap heap;
+  void* block = heap.malloc(100);
+  AUD_CHECK(block != nullptr && heap.bytes >= 100);
+  block = heap.realloc(block, 5000);
+  AUD_CHECK(block != nullptr && heap.bytes >= 5000);
+  void* zeroed = heap.calloc(10, 10);
+  AUD_CHECK(zeroed != nullptr && heap.bytes >= 5100);
+  heap.free(zeroed);
+  heap.free(nullptr);
+  // A realloc to 0 bytes frees the block.
+  AUD_CHECK(heap.realloc(block, 0) == nullptr);
+  AUD_CHECK(heap.bytes == 0);
+  block = heap.realloc(nullptr, 64);
+  AUD_CHECK(block != nullptr && heap.bytes >= 64);
+  heap.free(block);
+  AUD_CHECK(heap.bytes == 0);
 }
 
 AUD_TEST(the_node_refuses_what_it_cannot_take) {
