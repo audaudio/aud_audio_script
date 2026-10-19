@@ -5,15 +5,33 @@
 // found in the LICENSE file in the root of this package.
 
 {
+  // The package name, as declared in pubspec.yaml / package.json.
   "name": "aud_audio_script",
-  "summary": "Script modulation of the Audanika Audio Engine: the node aud.script.modulator runs JavaScript on QuickJS-ng in a worker of its own and sends controls once per audio buffer; optional, apps add it explicitly.",
+
+  // 1-2 sentence summary about this repo.
+  "summary": "Script modulation of the Audanika Audio Engine on ABI 0.4: the node aud.script.modulator runs JavaScript on QuickJS-ng in a worker of its own and sends controls on 16 event outputs once per audio block; optional, apps add it explicitly.",
+
+  // 1-3 bullet points: the problem space.
   "domain": [
-    "Script modulation of the Audanika Audio Engine"
+    "Node aud.script.modulator: tick per block on a beat-locked grid, ramp or step per output, value-change-only AUD_EVENT_CONTROL, late worker holds and counts, offline renders wait; worker with semaphore and lock-free rings, on any core or the fast cores / user-interactive QoS",
+    "QuickJS-ng 0.17.0 (MIT) from gg_quickjs, compiled into the package's library, the only engine, behind an internal engine interface: memory limit (set after the context, sources compiled without it), tick budget and a counting allocator per context; notices check",
+    "Process-wide stats (ticks, late, skipped, aborted, p50/p99 tick time, placement, load, memory, last error, console), simulate without a graph, a paced bench and a public synthetic workload; native tests under ASan/UBSan, RTSan, TSan; link hook drops an unused library"
   ],
+
+  // The repos this one depends on and the repos depending on it.
+  // Keep the reason or the API behind each entry, not just the name.
   "interfaces": {
+    // "<repo-a>": "why / API"
     "uses": {
-      "aud_audio_core": "package dependency"
+      "aud_audio_core": "package dependency: C ABI 0.4 header, aud_transport.h, aud_ump.h, aud_clock.h",
+      "gg_quickjs": "package dependency (pub.dev): the QuickJS-ng sources and QuickjsNgBuild of package:gg_quickjs/hook.dart for the build hook and the native tests",
+      "aud_audio_graph": "dev dependency: engine of the native and the Dart tests",
+      "aud_audio": "example/ dependency: AudEngine runs the modulator with the synthetic workload"
     },
-    "usedBy": {}
+
+    // "<repo-b>": "why / API"
+    "usedBy": {
+      "apps": "script modulation via AudNativeNodePackage(AudAudioScript.name, AudAudioScript.register); never a dependency of the engine or the umbrella"
+    }
   }
 }

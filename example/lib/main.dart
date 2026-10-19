@@ -1,74 +1,122 @@
-import 'package:flutter/material.dart';
+// @license
+// Copyright (c) Audanika. All Rights Reserved.
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
 
 import 'dart:async';
 
-import 'package:aud_audio_script/aud_audio_script.dart' as aud_audio_script;
+import 'package:aud_audio/aud_audio_ffi.dart';
+import 'package:aud_audio_script/aud_audio_script.dart';
+import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const ScriptApp());
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+// #############################################################################
+/// The example of `aud_audio_script` on the engine of `aud_audio`: a
+/// modulator runs the synthetic workload of the package while the transport
+/// plays; the page shows its statistics and runs the bench.
+class ScriptApp extends StatefulWidget {
+  /// Creates the app; [config] replaces the engine's configuration.
+  const ScriptApp({super.key, this.config = const AudEngineConfig()});
+
+  /// The configuration of the engine.
+  final AudEngineConfig config;
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<ScriptApp> createState() => ScriptAppState();
 }
 
-class _MyAppState extends State<MyApp> {
-  late int sumResult;
-  late Future<int> sumAsyncResult;
+// #############################################################################
+/// The state of [ScriptApp]: the engine with the package registered and the
+/// modulator.
+class ScriptAppState extends State<ScriptApp> {
+  /// The engine.
+  late final AudEngine engine = AudEngine(
+    config: widget.config,
+    packages: [
+      AudNativeNodePackage(AudAudioScript.name, AudAudioScript.register),
+    ],
+  );
+
+  /// The modulator; its outputs lead nowhere, the statistics tell what it
+  /// does.
+  late final AudNode modulator;
+
+  /// The statistics of the modulators, read every second.
+  AudScriptStats stats = const AudScriptStats();
+
+  /// The result of the last bench, or what failed.
+  String bench = '';
+
+  late final Timer _refresh;
 
   @override
   void initState() {
     super.initState();
-    sumResult = aud_audio_script.sum(1, 2);
-    sumAsyncResult = aud_audio_script.sumAsync(3, 4);
+    engine.prepare();
+    final graph = engine.graph;
+    modulator = graph.createNode(AudScriptModulator.typeId);
+    graph
+      ..transaction((tx) {})
+      ..setString(modulator, AudScriptModulator.scriptName, 'synthetic.js')
+      ..setString(
+        modulator,
+        AudScriptModulator.script,
+        AudScriptBench.syntheticScript,
+      )
+      ..transport(const AudTransportRequest.setTempo(120))
+      ..transport(const AudTransportRequest.start());
+    engine.start();
+    _refresh = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => setState(() => stats = AudScriptModulator.stats()),
+    );
   }
 
   @override
-  Widget build(BuildContext context) {
-    const textStyle = TextStyle(fontSize: 25);
-    const spacerSmall = SizedBox(height: 10);
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: const Text('Native Packages')),
-        body: SingleChildScrollView(
-          child: Container(
-            padding: const .all(10),
-            child: Column(
-              children: [
-                const Text(
-                  'This calls a native function through FFI that is shipped as source in the package. '
-                  'The native code is built as part of the Flutter Runner build.',
-                  style: textStyle,
-                  textAlign: .center,
-                ),
-                spacerSmall,
-                Text(
-                  'sum(1, 2) = $sumResult',
-                  style: textStyle,
-                  textAlign: .center,
-                ),
-                spacerSmall,
-                FutureBuilder<int>(
-                  future: sumAsyncResult,
-                  builder: (BuildContext context, AsyncSnapshot<int> value) {
-                    final displayValue = (value.hasData)
-                        ? value.data
-                        : 'loading';
-                    return Text(
-                      'await sumAsync(3, 4) = $displayValue',
-                      style: textStyle,
-                      textAlign: .center,
-                    );
-                  },
-                ),
-              ],
+  void dispose() {
+    _refresh.cancel();
+    engine.dispose();
+    super.dispose();
+  }
+
+  /// Runs the bench of the synthetic workload.
+  void runBench() {
+    try {
+      final result = AudScriptBench.measure(
+        AudScriptBench.syntheticScript,
+        ticks: 500,
+      );
+      setState(() => bench = '$result');
+    } on AudScriptException catch (e) {
+      setState(() => bench = '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'aud_audio_script',
+    theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
+    home: Scaffold(
+      appBar: AppBar(title: const Text('aud_audio_script')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('$stats', key: const Key('stats')),
+          if (stats.lastError.isNotEmpty) Text(stats.lastError),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton(
+              onPressed: runBench,
+              child: const Text('Bench'),
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          Text(bench, key: const Key('bench')),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
