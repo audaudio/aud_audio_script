@@ -85,9 +85,22 @@
 - Add the review fixes of the script modulator
 
 - Keep one undo entry per pair a tick touches, so that a loop of sends no longer grows the undo log without bound
+
 - Keep the sends of a load only for a runner with a send log, the simulation's
+
 - Cut a console line at 4096 bytes on a whole UTF-8 character, also inside a single argument
+
 - Share the defaults and limits and the load, budget and timing helpers of the node, the simulation and the bench
+
 - Correct the comments on where the worker runs, on the lookahead of a simulated control change and on the bench output in the READMEs
+
 - List the remaining public types in the Dart API of both READMEs
+
 - Test the console cut, the sends of a load and a second send to a pair in an aborted tick
+
+- Add QuickJS-ng from gg_quickjs instead of vendored sources
+
+- Add gg_quickjs ^0.1.0 and build QuickJS-ng with its QuickjsNgBuild in the build hook; remove src/third_party/quickjs-ng
+- Take the QuickJS-ng sources of the native tests from the gg_quickjs package
+- Set the memory limit after the context exists and compile sources without it, against two out-of-memory bugs of QuickJS-ng 0.17.0
+- Keep the MIT notice of QuickJS-ng in NOTICES.md; document the dependency and the remaining risk

@@ -8,52 +8,35 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:code_assets/code_assets.dart';
+import 'package:gg_quickjs/hook.dart';
 import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
 import 'package:native_toolchain_c/native_toolchain_c.dart';
 
-// Builds the modulator (ticket 31) in two steps: the vendored QuickJS-ng as
-// C into a static library, then the package as C++17 against the
-// header-only ABI of aud_audio_core, resolved through the package config,
-// linked with that library into the one dynamic library of the package; the
-// package never links the engine (build-001). A single compiler call
-// cannot take C and C++17 at once, and a static library that no asset
-// names stays inside the hook's output. The flags follow aud_dsp_effects:
-// hidden symbols - only the entry points of aud_audio_script.h are
-// visible, so that QuickJS-ng never clashes with another copy in the app
-// -, on Android 16 KB pages, the static C++ runtime kept inside the
-// library, unused code dropped and no undefined symbol left.
+// Builds the modulator (ticket 31) in two steps: QuickJS-ng from the
+// package gg_quickjs as C into a static library (QuickjsNgBuild), then the
+// package as C++17 against the header-only ABI of aud_audio_core, resolved
+// through the package config, linked with that library into the one
+// dynamic library of the package; the package never links the engine
+// (build-001). A single compiler call cannot take C and C++17 at once, and
+// a static library that no asset names stays inside the hook's output.
+// The flags of QuickjsNgBuild.libraryFlags - hidden symbols, so that
+// QuickJS-ng never clashes with another copy in the app, unused code
+// dropped, the static libraries kept inside, on Android 16 KB pages - and
+// those of aud_dsp_effects: hidden inline functions, on Android the static
+// C++ runtime, a section per function of the package and no undefined
+// symbol left. Only the entry points of aud_audio_script.h are visible.
 void main(List<String> args) async {
   await build(args, (input, output) async {
     if (!input.config.buildCodeAssets) return;
     final packageName = input.packageName;
     final targetOS = input.config.code.targetOS;
     final android = targetOS == OS.android;
-    final apple = targetOS == OS.iOS || targetOS == OS.macOS;
     final windows = targetOS == OS.windows;
     final logger = Logger('')
       ..level = Level.ALL
       ..onRecord.listen((record) => stdout.writeln(record.message));
-    final quickjs = CBuilder.library(
-      name: quickjsLibrary,
-      sources: quickjsSources,
-      includes: [quickjsDirectory],
-      std: windows ? null : 'gnu11',
-      linkModePreference: LinkModePreference.static,
-      optimizationLevel: OptimizationLevel.o2,
-      defines: {'_GNU_SOURCE': null},
-      flags: [
-        if (windows) ...[
-          '/std:c11',
-          '/experimental:c11atomics',
-        ] else ...[
-          '-fvisibility=hidden',
-          '-ffunction-sections',
-          '-fdata-sections',
-          '-w',
-        ],
-      ],
-    );
+    const quickjs = QuickjsNgBuild(libraryName: quickjsLibrary);
     await quickjs.run(input: input, output: output, logger: logger);
     final library = CBuilder.library(
       name: packageName,
@@ -61,32 +44,27 @@ void main(List<String> args) async {
       sources: sources,
       includes: [
         'src',
-        quickjsDirectory,
+        await QuickjsNgBuild.includeDirectory(),
         await packageSrcDirectory('aud_audio_core'),
       ],
       language: Language.cpp,
       std: 'c++17',
       cppLinkStdLib: android ? 'c++_static' : null,
       flags: [
-        if (!windows) ...['-fvisibility=hidden', '-fvisibility-inlines-hidden'],
+        ...QuickjsNgBuild.libraryFlags(targetOS),
+        if (!windows) '-fvisibility-inlines-hidden',
         if (android) ...[
-          '-Wl,-z,max-page-size=16384',
-          // The static C++ runtime and QuickJS-ng stay inside the library.
-          '-Wl,--exclude-libs,ALL',
           // Code nothing calls leaves the library.
           '-ffunction-sections',
           '-fdata-sections',
-          '-Wl,--gc-sections',
           // A symbol the library leaves undefined fails the link, not the
           // load in the app.
           '-Wl,--no-undefined',
         ],
-        if (apple) '-Wl,-dead_strip',
       ],
       libraries: [
-        quickjsLibrary,
-        if (android) 'm',
-        if (targetOS == OS.linux) ...['m', 'pthread'],
+        quickjs.libraryName,
+        ...QuickjsNgBuild.systemLibraries(targetOS),
       ],
     );
     await library.run(
@@ -107,17 +85,6 @@ void main(List<String> args) async {
 
 /// The name of the static library of QuickJS-ng inside the hook's output.
 const String quickjsLibrary = 'aud_quickjs';
-
-/// The folder of the vendored QuickJS-ng, relative to the package root.
-const String quickjsDirectory = 'src/third_party/quickjs-ng';
-
-/// The C sources of QuickJS-ng, relative to the package root.
-const List<String> quickjsSources = [
-  '$quickjsDirectory/dtoa.c',
-  '$quickjsDirectory/libregexp.c',
-  '$quickjsDirectory/libunicode.c',
-  '$quickjsDirectory/quickjs.c',
-];
 
 /// The C++ sources of the package, relative to the package root.
 const List<String> sources = [

@@ -42,9 +42,10 @@ dependencies:
 ```
 
 Eine App hängt von `aud_audio` und den DSP-Paketen ab, die sie nutzt, und
-registriert sie bei ihrer Engine. Der Build-Hook kompiliert das
-mitgelieferte QuickJS-ng als C und den Knoten als C++17 mit der Toolchain
-des Ziels gegen den ABI-Header von `aud_audio_core` zu einer Bibliothek
+registriert sie bei ihrer Engine. Der Build-Hook kompiliert QuickJS-ng
+als C aus dem pub.dev-Paket `gg_quickjs` (über dessen `QuickjsNgBuild`)
+und den Knoten als C++17 mit der Toolchain des Ziels gegen den ABI-Header
+von `aud_audio_core` und linkt beide zu einer Bibliothek
 pro Architektur (iOS, Android, macOS; Linux und Windows im Prinzip). Das
 Paket braucht kein Flutter. Die nativen Tests brauchen
 Node.js und `clang++`; ihr RealtimeSanitizer-Build braucht einen clang,
@@ -63,7 +64,7 @@ node scripts/check-notices.js   # die Lizenzhinweise
   [aud_audio_pm](https://github.com/audaudio/aud_audio_pm/tree/main/doc/2026-Q4/concepts/decisions):
   interop-001 (Dart nie auf dem Audio-Thread; der eigene Worker des
   Knotens ist die festgehaltene Ausnahme), abi-001 (die C-ABI), build-001
-  (mitgeliefertes C, vom Hook kompiliert), license-001 (nur permissive
+  (C von Dritten, vom Hook kompiliert), license-001 (nur permissive
   Quellen)
 - Die C-API mit dem Tick-Raster: [`src/aud_audio_script.h`](src/aud_audio_script.h)
 - Die JavaScript-API: [`src/aud_script_engine.hpp`](src/aud_script_engine.hpp)
@@ -219,8 +220,9 @@ der Engine mit dem Fehler.
 
 ### Die Engine
 
-QuickJS-ng 0.17.0 (MIT) ist mitgeliefert und führt die Skripte auf jeder
-Plattform aus: eine Runtime pro Kontext mit einem Speicherlimit
+QuickJS-ng 0.17.0 (MIT), aus den Quellen von `gg_quickjs` in die
+Bibliothek des Pakets kompiliert, führt die Skripte auf jeder Plattform
+aus: eine Runtime pro Kontext mit einem Speicherlimit
 (`memory_limit`, 32 MB) und einem Interrupt-Handler, der einen Tick nach
 `tick_budget` (100 ms) stoppt; ein abgebrochener Tick verwirft seine
 Werte. Es sitzt hinter einer dünnen Engine-Schnittstelle im Paket, die
@@ -256,6 +258,12 @@ Kern er seinen letzten Tick rechnete.
 - Der Speicher eines QuickJS-ng-Kontexts ist der Zähler seines
   Allokators: die Bytes des Systemallokators, die er hält, nach ihrer
   nutzbaren Größe.
+- QuickJS-ng 0.17.0 erholt sich nicht davon, wenn ihm in `JS_NewContext`
+  oder beim Parsen der Speicher ausgeht. Der Knoten setzt das
+  Speicherlimit erst, wenn der Kontext existiert, und kompiliert eine
+  geladene Quelle ohne das Limit, bevor er sie mit dem Limit ausführt;
+  `eval` oder `new Function` in einem Skript, das seinen Speicher
+  aufgebraucht hat, kann den Prozess trotzdem abstürzen lassen.
 
 ### Die Dart-API
 

@@ -177,6 +177,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  gg_quickjs:
+    dependency: transitive
+    description:
+      name: gg_quickjs
+      sha256: "9c25a3b090b41f5e971b436a35ada97bb2828141cb272f37d511b5f8868d8f98"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0"
   glob:
     dependency: transitive
     description:

@@ -92,7 +92,9 @@ class AudQuickJsContext final : public AudScriptContext {
     rt_ = JS_NewRuntime2(&kHeapFunctions, &heap_);
     if (rt_ == nullptr)
       return fail("QuickJS-ng has no memory for a runtime", error);
-    JS_SetMemoryLimit(rt_, memoryLimit);
+    // The memory limit applies once the context and its globals exist:
+    // QuickJS-ng 0.17.0 does not recover from running out of memory inside
+    // JS_NewContext (a use after free that AddressSanitizer finds).
     JS_SetMaxStackSize(rt_, kScriptStackBytes);
     JS_SetInterruptHandler(rt_, interrupt, this);
     // Atomics.wait would block the worker.
@@ -141,16 +143,38 @@ class AudQuickJsContext final : public AudScriptContext {
       JS_FreeValue(ctx_, JS_GetException(ctx_));
       return fail("QuickJS-ng has no memory for the globals", error);
     }
+    if (memoryLimit != 0 && heap_.bytes > memoryLimit) {
+      return fail("the memory limit is below what an empty context holds",
+                  error);
+    }
+    setMemoryLimit(memoryLimit);
     return true;
   }
 
   int32_t evaluate(const std::string& source, const std::string& name,
                    int64_t deadlineNs, std::string* error) override {
     begin(deadlineNs);
-    // QuickJS-ng reads the source up to its terminating zero.
-    const JSValue result = JS_Eval(ctx_, source.c_str(), source.size(),
-                                   name.c_str(), JS_EVAL_TYPE_GLOBAL);
-    return finish(result, error);
+    // The source compiles without the memory limit, and runs with it:
+    // QuickJS-ng 0.17.0 does not recover from running out of memory while
+    // it parses (an overflow in has_with_scope). QuickJS-ng reads the
+    // source up to its terminating zero.
+    JS_SetMemoryLimit(rt_, 0);
+    const JSValue compiled =
+        JS_Eval(ctx_, source.c_str(), source.size(), name.c_str(),
+                JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY);
+    JS_SetMemoryLimit(rt_, memoryLimit_);
+    if (JS_IsException(compiled)) return finish(compiled, error);
+    // A compiled source beyond the limit would fail to run with a
+    // misleading TypeError of QuickJS-ng.
+    if (memoryLimit_ != 0 && heap_.bytes > memoryLimit_) {
+      JS_FreeValue(ctx_, compiled);
+      deadline_ = 0;
+      if (error != nullptr) {
+        *error = "out of memory: the compiled source exceeds the memory limit";
+      }
+      return AUD_SCRIPT_TICK_FAILED;
+    }
+    return finish(JS_EvalFunction(ctx_, compiled), error);
   }
 
   int32_t controlChange(uint32_t channel, uint32_t number, double value,
@@ -177,7 +201,10 @@ class AudQuickJsContext final : public AudScriptContext {
     return callHandler(onTick_, 0, nullptr, deadlineNs, error);
   }
 
-  void setMemoryLimit(size_t bytes) override { JS_SetMemoryLimit(rt_, bytes); }
+  void setMemoryLimit(size_t bytes) override {
+    memoryLimit_ = bytes;
+    JS_SetMemoryLimit(rt_, bytes);
+  }
 
   // The counter of the allocator: O(1), so that the worker reads it
   // between two ticks.
@@ -282,8 +309,11 @@ class AudQuickJsContext final : public AudScriptContext {
     deadline_ = 0;
     if (!failed) return AUD_SCRIPT_TICK_OK;
     const JSValue exception = JS_GetException(ctx_);
+    // The description may need memory that the script used up.
+    JS_SetMemoryLimit(rt_, 0);
     if (error != nullptr) *error = describe(exception);
     JS_FreeValue(ctx_, exception);
+    JS_SetMemoryLimit(rt_, memoryLimit_);
     return interrupted_ ? AUD_SCRIPT_TICK_INTERRUPTED : AUD_SCRIPT_TICK_FAILED;
   }
 
@@ -332,6 +362,7 @@ class AudQuickJsContext final : public AudScriptContext {
   JSAtom onControl_ = 0;
   int64_t deadline_ = 0;
   bool interrupted_ = false;
+  size_t memoryLimit_ = 0;
 };
 
 }  // namespace

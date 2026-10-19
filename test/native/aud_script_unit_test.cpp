@@ -307,6 +307,30 @@ AUD_TEST(creates_its_contexts_on_quickjs) {
             AUD_SCRIPT_TICK_OK);
 }
 
+AUD_TEST(the_memory_limit_spares_the_context_and_the_parser) {
+  NullSink sink;
+  std::string error;
+  // A limit below what an empty context holds fails the creation instead
+  // of running out of memory inside JS_NewContext.
+  AUD_CHECK(audScriptCreateContext(64u * 1024u, &sink, &error) == nullptr);
+  AUD_CHECK(error.find("memory limit") != std::string::npos);
+  // A source whose compilation alone outgrows the limit compiles without
+  // it and then fails, which QuickJS-ng survives.
+  std::unique_ptr<AudScriptContext> context =
+      audScriptCreateContext(1u << 20, &sink, &error);
+  AUD_CHECK(context != nullptr);
+  if (context == nullptr) return;
+  std::string source = "var big = [";
+  for (int i = 0; i < 200000; ++i) source += "1,";
+  source += "1];";
+  AUD_CHECK(context->evaluate(source, "big.js", 0, &error) ==
+            AUD_SCRIPT_TICK_FAILED);
+  AUD_CHECK(error.find("out of memory") != std::string::npos);
+  // The context goes on.
+  AUD_CHECK(context->evaluate("var small = 1;", "small.js", 0, &error) ==
+            AUD_SCRIPT_TICK_OK);
+}
+
 AUD_TEST(cuts_a_console_line_at_a_whole_character) {
   // A sink that keeps the console lines.
   struct LineSink : NullSink {

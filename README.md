@@ -39,9 +39,10 @@ dependencies:
 ```
 
 An app depends on `aud_audio` and on the DSP packages it uses, and
-registers them with its engine. The build hook compiles the vendored
-QuickJS-ng as C and the node as C++17 with the toolchain of the target
-against the ABI header of `aud_audio_core`, into one library per
+registers them with its engine. The build hook compiles QuickJS-ng as C
+from the pub.dev package `gg_quickjs` (through its `QuickjsNgBuild`) and
+the node as C++17 with the toolchain of the target against the ABI header
+of `aud_audio_core`, and links both into one library per
 architecture (iOS, Android, macOS; Linux and Windows in principle). The
 package needs no Flutter. The native tests need Node.js and `clang++`;
 their RealtimeSanitizer build needs a clang that has it, e.g. LLVM from
@@ -58,7 +59,7 @@ node scripts/check-notices.js   # the third-party notices
 - The decisions behind the package in
   [aud_audio_pm](https://github.com/audaudio/aud_audio_pm/tree/main/doc/2026-Q4/concepts/decisions):
   interop-001 (Dart never on the audio thread; the node's own worker is
-  the recorded exception), abi-001 (the C ABI), build-001 (vendored C
+  the recorded exception), abi-001 (the C ABI), build-001 (third-party C
   compiled by the hook), license-001 (permissive sources only)
 - The C API with the tick grid: [`src/aud_audio_script.h`](src/aud_audio_script.h)
 - The JavaScript API: [`src/aud_script_engine.hpp`](src/aud_script_engine.hpp)
@@ -207,8 +208,8 @@ error.
 
 ### The engine
 
-QuickJS-ng 0.17.0 (MIT) is bundled and runs the scripts on every
-platform: a runtime per context with a memory limit (`memory_limit`,
+QuickJS-ng 0.17.0 (MIT), compiled into the package's library from the
+sources of `gg_quickjs`, runs the scripts on every platform: a runtime per context with a memory limit (`memory_limit`,
 32 MB) and an interrupt handler that stops a tick after `tick_budget`
 (100 ms); an aborted tick drops its values. It sits behind a thin engine
 interface inside the package, which is not public.
@@ -240,6 +241,11 @@ it ran its last tick on.
   throws a RangeError.
 - The memory of a QuickJS-ng context is the count of its allocator: the
   bytes of the system's allocator it holds, by their usable size.
+- QuickJS-ng 0.17.0 does not recover from running out of memory inside
+  `JS_NewContext` or while it parses. The node sets the memory limit only
+  after the context exists and compiles a loaded source without the limit
+  before it runs it with the limit; `eval` or `new Function` inside a
+  script that used up its memory may still crash the process.
 
 ### The Dart API
 

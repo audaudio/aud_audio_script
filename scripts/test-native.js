@@ -5,17 +5,18 @@
 // found in the LICENSE file in the root of this package.
 
 // Builds and runs the native tests of the modulator (ticket 31): the node,
-// the vendored QuickJS-ng and the tests together with the graph engine of
-// aud_audio_graph, all with the engine's debug watchdog, which then sees
-// the node's allocations on the audio thread too. Up to three builds, like
-// the graph's tests:
+// QuickJS-ng from the package gg_quickjs and the tests together with the
+// graph engine of aud_audio_graph, all with the engine's debug watchdog,
+// which then sees the node's allocations on the audio thread too. Up to
+// three builds, like the graph's tests:
 //
 // - the address and the undefined behaviour sanitizer,
 // - Clang's RealtimeSanitizer when a compiler on this machine has it, with
 //   a probe that proves the run catches an allocation on the audio thread,
 // - the thread sanitizer.
 //
-// QuickJS-ng compiles as C, the rest as C++17, as in the build hook. The
+// QuickJS-ng compiles as C with the defines and the flags of gg_quickjs's
+// QuickjsNgBuild, the rest as C++17, as in the build hook. The
 // tests run the synthetic workload of the package; this script takes it
 // from the raw string of lib/src/aud_script_bench.dart.
 //
@@ -175,7 +176,10 @@ function units(context) {
     result.push({ file, flags: graphFlags });
   }
   for (const file of context.quickjsSources) {
-    result.push({ file, flags: ['-x', 'c', '-std=gnu11', '-D_GNU_SOURCE'] });
+    result.push({
+      file,
+      flags: ['-x', 'c', '-std=gnu11', '-D_GNU_SOURCE', '-funsigned-char', '-w'],
+    });
   }
   for (const file of context.scriptSources) {
     result.push({ file, flags: ['-std=c++17'] });
@@ -345,7 +349,7 @@ async function main() {
   const coreSrc = path.join(packageRoot('aud_audio_core'), 'src');
   const graphSrc = path.join(packageRoot('aud_audio_graph'), 'src');
   const src = path.join(root, 'src');
-  const quickjs = path.join(src, 'third_party', 'quickjs-ng');
+  const quickjs = path.join(packageRoot('gg_quickjs'), 'src', 'quickjs-ng');
   const tests = path.join(root, 'test', 'native');
   const includes = [src, quickjs, coreSrc, graphSrc, tests];
   const headers = headersBelow(includes);
