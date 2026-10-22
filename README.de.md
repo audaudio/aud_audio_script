@@ -46,9 +46,10 @@ registriert sie bei ihrer Engine. Der Build-Hook kompiliert QuickJS-ng
 als C aus dem pub.dev-Paket `gg_quickjs` (über dessen `QuickjsNgBuild`)
 und den Knoten als C++17 mit der Toolchain des Ziels gegen den ABI-Header
 von `aud_audio_core` und linkt beide zu einer Bibliothek
-pro Architektur (iOS, Android, macOS; Linux und Windows im Prinzip). Das
+pro Architektur (iOS, Android, macOS, Windows; Linux im Prinzip). Das
 Paket braucht kein Flutter. Die nativen Tests brauchen
-Node.js und `clang++`; ihr RealtimeSanitizer-Build braucht einen clang,
+Node.js und `clang++` - unter Windows den „C++-Clang-Compiler für
+Windows“ von Visual Studio; ihr RealtimeSanitizer-Build braucht einen clang,
 der ihn hat, z. B. LLVM aus Homebrew auf macOS (`brew install llvm`), und
 wird ohne ihn übersprungen.
 
@@ -240,8 +241,10 @@ ruhenden großen Kerne isoliert, hatte der gebundene Worker keinen anderen
 schnellen Kern und wartete dort auf den Echtzeit-Audio-Thread - bei
 direkt aufeinanderfolgenden Callbacks mehrere Blöcke lang, sodass Ticks zu
 spät kamen, obwohl ein Tick ein Dreißigstel eines Blocks brauchte. Nach
-einer Änderung platziert sich der Worker beim nächsten Aufwachen neu. Auf
-Apple-Plattformen läuft er in jedem Fall in der Quality-of-Service-Klasse
+einer Änderung platziert sich der Worker beim nächsten Aufwachen neu.
+Unter Windows bindet er sich auf einem Hybridprozessor an die
+Performance-Kerne, erkannt an ihrer Effizienzklasse, und läuft auf
+anderen dort, wo Windows ihn hinsetzt. Auf Apple-Plattformen läuft er in jedem Fall in der Quality-of-Service-Klasse
 user-interactive. Die Statistiken sagen, wo er läuft, welche Priorität
 gilt, für welches `worker_cores` er sich platziert hat und auf welchem
 Kern er seinen letzten Tick rechnete.
