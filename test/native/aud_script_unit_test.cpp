@@ -241,8 +241,8 @@ AUD_TEST(the_exports_of_the_statistics_check_their_arguments) {
   AUD_CHECK(aud_audio_script_last_error(nullptr, 0, &size) ==
             AUD_ERROR_BUFFER_TOO_SMALL);
   AUD_CHECK(size == AudScriptGlobalStats::kMaxText);
-  char small[4];
-  AUD_CHECK(aud_audio_script_last_error(small, sizeof(small), &size) ==
+  char tiny[4];
+  AUD_CHECK(aud_audio_script_last_error(tiny, sizeof(tiny), &size) ==
             AUD_ERROR_BUFFER_TOO_SMALL);
   for (int i = 0; i < 70; ++i) {
     AudScriptGlobalStats::get().addConsoleLine("line " + std::to_string(i));

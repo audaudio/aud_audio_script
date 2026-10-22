@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Place the script worker on Windows
+
 ## 0.1.1 - 2026-10-22
 
 ### Added

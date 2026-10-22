@@ -137,13 +137,13 @@ AUD_EXPORT int32_t aud_audio_script_register(const AudHostApi* host);
 enum {
   // No worker placed itself yet, or the platform has no placement.
   AUD_SCRIPT_PLACEMENT_SYSTEM = 0,
-  // Android and Linux: bound to the fast cores.
+  // Android, Linux and Windows: bound to the fast cores.
   AUD_SCRIPT_PLACEMENT_FAST_CORES = 1,
   // Apple platforms: the quality of service class user-interactive.
   AUD_SCRIPT_PLACEMENT_QOS = 2,
   // The system refused the binding; the worker runs where it is put.
   AUD_SCRIPT_PLACEMENT_REFUSED = 3,
-  // Android and Linux: any core, as "worker_cores" asks.
+  // Android, Linux and Windows: any core, as "worker_cores" asks.
   AUD_SCRIPT_PLACEMENT_ANY_CORE = 4,
 };
 
