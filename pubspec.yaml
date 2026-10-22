@@ -42,10 +42,16 @@ dev_dependencies:
   test: ^1.31.0
 
 # The example plays on the engine of aud_audio, which pins exact versions of
-# aud_audio_core; the workspace takes the core this package needs.
+# aud_audio_core and aud_audio_graph; the workspace takes the versions this
+# package needs.
 dependency_overrides:
   aud_audio_core:
     git:
       url: git@github.com:audaudio/aud_audio_core.git
       tag_pattern: "{{version}}"
     version: ^0.5.3
+  aud_audio_graph:
+    git:
+      url: git@github.com:audaudio/aud_audio_graph.git
+      tag_pattern: "{{version}}"
+    version: ^0.5.4
