@@ -7,6 +7,11 @@
 - Place the script worker on Windows
 - Document the Windows support
 - Document the Windows behavior in both languages
+- Place the script worker on Windows
+
+Bind the worker to all cores or the performance cores of a hybrid CPU
+Define NOMINMAX before windows.h
+Native tests run with clang++ of Visual Studio
 
 ## 0.1.1 - 2026-10-22
 
