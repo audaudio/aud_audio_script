@@ -5,6 +5,7 @@
 ### Changed
 
 - Place the script worker on Windows
+- Document the Windows support
 
 ## 0.1.1 - 2026-10-22
 

@@ -43,8 +43,9 @@ registers them with its engine. The build hook compiles QuickJS-ng as C
 from the pub.dev package `gg_quickjs` (through its `QuickjsNgBuild`) and
 the node as C++17 with the toolchain of the target against the ABI header
 of `aud_audio_core`, and links both into one library per
-architecture (iOS, Android, macOS; Linux and Windows in principle). The
-package needs no Flutter. The native tests need Node.js and `clang++`;
+architecture (iOS, Android, macOS, Windows; Linux in principle). The
+package needs no Flutter. The native tests need Node.js and `clang++` -
+on Windows the "C++ Clang compiler for Windows" of Visual Studio;
 their RealtimeSanitizer build needs a clang that has it, e.g. LLVM from
 Homebrew on macOS (`brew install llvm`), and is skipped without one.
 
@@ -225,7 +226,9 @@ by the vendor's core control, the bound worker had no other fast core to
 go to and waited there for the realtime audio thread - for several blocks
 when callbacks came back to back, so ticks were late although a tick took
 a thirtieth of a block. The worker places itself anew at its next wake-up
-after a change. On Apple platforms it runs at the quality of service class
+after a change. On Windows it binds to the performance cores of a hybrid
+processor, by their efficiency class, and runs where Windows puts it on
+others. On Apple platforms it runs at the quality of service class
 user-interactive either way. The statistics tell where it runs, the
 priority that held, the `worker_cores` it placed itself for and the core
 it ran its last tick on.
