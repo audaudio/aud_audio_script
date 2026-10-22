@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add the example to a pub workspace of the package
+- The example is a member of the workspace of pubspec.yaml, so that upgrading the package upgrades the example too; its own lock goes
+- The workspace overrides aud_audio_core from git, ^0.5.3: the engine of aud_audio the example plays on pins core exactly
+- test ^1.31.0, within the test_api that flutter_test of the example pins
+
 ## 0.1.0 - 2026-10-19
 
 ### Added
