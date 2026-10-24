@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 - 2026-10-24
+
+### Changed
+
+- Place the script worker on Windows
+- Document the Windows support
+- Document the Windows behavior in both languages
+- Place the script worker on Windows
+
 ## 0.1.1 - 2026-10-22
 
 ### Added
