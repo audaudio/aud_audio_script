@@ -1,19 +1,28 @@
 # aud_audio_script
 
-Skript-Modulation für die Audanika Audio Engine: Der Knoten
-`aud.script.modulator` führt JavaScript auf QuickJS-ng in einem eigenen
-Worker-Thread aus und sendet einmal pro Audioblock Controls auf seinen
-Event-Ausgängen - zum Beispiel taktgebundene Breakpoint-LFOs, die Cutoff,
-Resonanz, Lautstärke und Panorama von Samplern steuern. Das Paket ist
-optional: Kein anderes Paket der Engine hängt davon ab, eine App, die
-Skripte ausführt, fügt es hinzu.
+[English](README.md) | Deutsch
 
-Teil der Audanika Audio Engine; geplant in [aud_audio_pm](https://github.com/audaudio/aud_audio_pm).
+[![CI](https://github.com/audaudio/aud_audio_script/actions/workflows/quick_check.yaml/badge.svg)](https://github.com/audaudio/aud_audio_script/actions/workflows/quick_check.yaml)
 
-## Ziele
+Skript-Modulation der Audanika Audio Engine: Der Knoten
+aud.script.modulator führt JavaScript auf QuickJS-ng in einem eigenen
+Worker aus und sendet einmal pro Audio-Buffer Controls; optional, Apps
+fügen ihn ausdrücklich hinzu.
 
-- Modulation in JavaScript - Hüllkurven, LFOs, Arithmetik zwischen ihnen,
-  Bedingungen auf Controllern - läuft unverändert in der Engine
+Die Controls gehen einmal pro Audioblock auf 16 Event-Ausgänge hinaus -
+zum Beispiel taktgebundene Breakpoint-LFOs, die Cutoff, Resonanz,
+Lautstärke und Panorama von Samplern steuern. Kein anderes Paket der
+Engine hängt davon ab, eine App, die Skripte ausführt, fügt es hinzu. Es
+läuft auf iOS, Android, macOS und Windows, Linux im Prinzip, und braucht
+kein Flutter. Teil der Audanika Audio Engine; geplant in
+[aud_audio_pm](https://github.com/audaudio/aud_audio_pm).
+
+## Motivation
+
+Modulation in JavaScript - Hüllkurven, LFOs, Arithmetik zwischen ihnen,
+Bedingungen auf Controllern - soll unverändert in der Engine laufen, ohne
+je den Audio-Thread zu berühren. Das Paket zielt auf:
+
 - JavaScript nie auf dem Audio-Thread und nie in Dart: Ein Worker des
   Knotens führt das Skript aus; der Audio-Thread signalisiert nur eine
   Semaphore, was nie blockiert, und tauscht Anfragen und Werte über
@@ -32,52 +41,71 @@ Teil der Audanika Audio Engine; geplant in [aud_audio_pm](https://github.com/aud
 
 ## Installation
 
+Das Paket ist nicht auf pub.dev veröffentlicht; es kommt aus git, so wie
+die Pakete der Engine einander referenzieren:
+
 ```yaml
 dependencies:
   aud_audio_script:
     git:
       url: git@github.com:audaudio/aud_audio_script.git
       tag_pattern: "{{version}}"
-    version: ^0.1.0
+    version: ^0.2.0
 ```
 
 Eine App hängt von `aud_audio` und den DSP-Paketen ab, die sie nutzt, und
 registriert sie bei ihrer Engine. Der Build-Hook kompiliert QuickJS-ng
 als C aus dem pub.dev-Paket `gg_quickjs` (über dessen `QuickjsNgBuild`)
 und den Knoten als C++17 mit der Toolchain des Ziels gegen den ABI-Header
-von `aud_audio_core` und linkt beide zu einer Bibliothek
-pro Architektur (iOS, Android, macOS, Windows; Linux im Prinzip). Das
-Paket braucht kein Flutter. Die nativen Tests brauchen
-Node.js und `clang++` - unter Windows den „C++-Clang-Compiler für
-Windows“ von Visual Studio; ihr RealtimeSanitizer-Build braucht einen clang,
-der ihn hat, z. B. LLVM aus Homebrew auf macOS (`brew install llvm`), und
-wird ohne ihn übersprungen.
+von `aud_audio_core` und linkt beide zu einer Bibliothek pro Architektur
+(iOS, Android, macOS, Windows; Linux im Prinzip).
 
-```bash
-dart test                       # Dart-Tests und native Tests
-node scripts/test-native.js     # nur die nativen Tests: ASan+UBSan, RTSan, TSan
-node scripts/check-notices.js   # die Lizenzhinweise
+## Verwendung
+
+Ein Skript läuft ohne Graph, Tick für Tick, in einer Simulation. Sie nimmt
+die öffentliche synthetische Last des Pakets, einen Control-Change bei
+Frame 4800, und liefert jeden Tick mit seinem Beat, seinem Frame und den
+Werten, die er gesendet hat:
+
+```dart
+import 'package:aud_audio_script/aud_audio_script.dart';
+
+void main() {
+  final simulation = AudScriptSimulation.simulate(
+    AudScriptBench.syntheticScript,
+    sampleRate: 48000,
+    frames: 256,
+    tempo: 120,
+    blocks: 100,
+    controlChanges: const [
+      AudScriptControlChange(frame: 4800, number: 74, value: 100),
+    ],
+  );
+  print(simulation.ticks.first);
+}
 ```
 
-## Dokumentation
+Es gibt aus:
 
-- Die Entscheidungen hinter dem Paket in
-  [aud_audio_pm](https://github.com/audaudio/aud_audio_pm/tree/main/doc/2026-Q4/concepts/decisions):
-  interop-001 (Dart nie auf dem Audio-Thread; der eigene Worker des
-  Knotens ist die festgehaltene Ausnahme), abi-001 (die C-ABI), build-001
-  (C von Dritten, vom Hook kompiliert), license-001 (nur permissive
-  Quellen)
-- Die C-API mit dem Tick-Raster: [`src/aud_audio_script.h`](src/aud_audio_script.h)
-- Die JavaScript-API: [`src/aud_script_engine.hpp`](src/aud_script_engine.hpp)
-- QuickJS-ng, seine Lizenz und die Prüfung:
-  [`src/third_party/NOTICES.md`](src/third_party/NOTICES.md)
-- Die Beispiel-App und ihre Messung: [`example`](example)
-- Die Guides in [`doc/guides`](doc/guides)
+```text
+tick 1 at beat 0.02127659574468085, frame 254: out0 300 = 0.1877774311709331, out0 301 = 0.23761165606884235, out0 302 = 0.7790602368890209, out0 303 = 0.10430198277967856, out1 300 = 0.3819502948006305, out1 301 = 0.3724952762345579, out1 302 = 0.5767518104887833, out1 303 = 0.34673351982798417, out2 300 = 0.48380707616960517, out2 301 = 0.3603894835539248, out2 302 = 0.6811539971110301, out2 303 = 0.5616054791065083
+```
 
-## Code-Beispiele
+Dieselbe Last, gemessen auf einem Worker, der wie der des Knotens
+platziert ist; die Zahlen hängen vom Gerät ab:
+
+```dart
+import 'package:aud_audio_script/aud_audio_script.dart';
+
+void main() {
+  final bench = AudScriptBench.measure(AudScriptBench.syntheticStressScript);
+  print(bench); // mean ... µs, p50 ... µs, p99 ... µs, max ... µs per tick of a block of 5333.3 µs ...
+}
+```
 
 Ein Modulator, der das Filter eines Samplers auf der Engine von
-`aud_audio` steuert (`aud_audio_ffi.dart` auf nativen Plattformen):
+`aud_audio` steuert (`aud_audio_ffi.dart` auf nativen Plattformen), wie
+es das [Beispiel](example) mit der synthetischen Last tut:
 
 ```dart
 import 'package:aud_audio/aud_audio_ffi.dart';
@@ -115,29 +143,44 @@ void main() {
 }
 ```
 
-Dasselbe Skript ohne Graph, Tick für Tick, und seine Geschwindigkeit auf
-einem Worker:
+## Grenzen
 
-```dart
-import 'package:aud_audio_script/aud_audio_script.dart';
+- Das Paket ist optional und nie eine Abhängigkeit der Engine oder des
+  Dachpakets; eine App, die keine Skripte ausführt, enthält es nicht.
+- Der Graph von `aud_audio_graph` nimmt pro Block höchstens 1024
+  gesendete Events an, für alle Knoten zusammen (`max_events_per_block`).
+  Ein Modulator sendet ein Event pro geändertem Wert, im Sprungmodus zwei;
+  ein Skript, das pro Block mehr Werte ändert, als hineinpassen, verliert
+  den Rest; der Graph verwirft und zählt sie.
+- Ein Kontext hält höchstens 1024 Paare (Ausgang, Id); ein Send an ein
+  weiteres wirft einen RangeError.
+- Der Speicher eines QuickJS-ng-Kontexts ist der Zähler seines
+  Allokators: die Bytes des Systemallokators, die er hält, nach ihrer
+  nutzbaren Größe.
+- QuickJS-ng 0.17.0 erholt sich nicht davon, wenn ihm in `JS_NewContext`
+  oder beim Parsen der Speicher ausgeht. Der Knoten setzt das
+  Speicherlimit erst, wenn der Kontext existiert, und kompiliert eine
+  geladene Quelle ohne das Limit, bevor er sie mit dem Limit ausführt;
+  `eval` oder `new Function` in einem Skript, das seinen Speicher
+  aufgebraucht hat, kann den Prozess trotzdem abstürzen lassen.
+- Nach Live-Blöcken können die ersten `lookahead` Offline-Blöcke noch die
+  Ticks verpassen, die der Worker live übersprungen hat (bekannt, nicht
+  behoben).
 
-void main() {
-  final simulation = AudScriptSimulation.simulate(
-    AudScriptBench.syntheticScript,
-    sampleRate: 48000,
-    frames: 256,
-    tempo: 120,
-    blocks: 100,
-    controlChanges: const [
-      AudScriptControlChange(frame: 4800, number: 74, value: 100),
-    ],
-  );
-  print(simulation.ticks.first); // tick 1 at beat 0.0212..., frame 254: ...
+## Dokumentation
 
-  final bench = AudScriptBench.measure(AudScriptBench.syntheticStressScript);
-  print(bench); // mean ... µs, p50 ... µs, p99 ... µs, max ... µs per tick of a block of 5333.3 µs ...
-}
-```
+- Die Entscheidungen hinter dem Paket in
+  [aud_audio_pm](https://github.com/audaudio/aud_audio_pm/tree/main/doc/2026-Q4/concepts/decisions):
+  interop-001 (Dart nie auf dem Audio-Thread; der eigene Worker des
+  Knotens ist die festgehaltene Ausnahme), abi-001 (die C-ABI), build-001
+  (C von Dritten, vom Hook kompiliert), license-001 (nur permissive
+  Quellen)
+- Die C-API mit dem Tick-Raster: [src/aud_audio_script.h](src/aud_audio_script.h)
+- Die JavaScript-API: [src/aud_script_engine.hpp](src/aud_script_engine.hpp)
+- QuickJS-ng, seine Lizenz und die Prüfung:
+  [src/third_party/NOTICES.md](src/third_party/NOTICES.md)
+- Die Beispiel-App und ihre Messung: [example](example)
+- Die Guides in [doc/guides](doc/guides) und der Blog in [doc/blog](doc/blog)
 
 ## Funktionsweise
 
@@ -173,7 +216,7 @@ beatsPerBlock = N * T / 60 / sr
 fractions     = ceil(1 / beatsPerBlock)
 d             = 1 / fractions
 g             = floor((b0 + beatsPerBlock) / d) * d     // aud.time.beat
-k             = floor((g - b0) * 60 / T * sr)           // 0 bei k >= N
+k             = floor((g - b0) * 60 / T * sr)           // 0 when k >= N
 ```
 
 und `g = b0`, `k = 0`, solange der Transport steht. Der Worker rechnet
@@ -211,13 +254,11 @@ angefragten Tick. Ein Offline-Block (`AUD_PROCESS_OFFLINE`) wartet auf
 sein Ergebnis, mit dem RealtimeSanitizer nur um dieses Warten herum aus,
 sodass Offline-Renderings deterministisch, nie zu spät und gleich der
 Simulation mit demselben Lookahead sind - ab dem ersten Offline-Block
-eines Graphen: Nach Live-Blöcken können die ersten `lookahead`
-Offline-Blöcke noch die Ticks verpassen, die der Worker live übersprungen
-hat (bekannt, nicht behoben). Ein Load baut einen neuen Kontext auf dem
-Worker und tauscht ihn vor dem ersten Tick ein, dessen Anfrage nach dem
-Load kam - die L vorher angefragten Blöcke ticken noch das alte Skript;
-ein fehlgeschlagener Load behält den alten Kontext und beendet den Load
-der Engine mit dem Fehler.
+eines Graphen. Ein Load baut einen neuen Kontext auf dem Worker und
+tauscht ihn vor dem ersten Tick ein, dessen Anfrage nach dem Load kam -
+die L vorher angefragten Blöcke ticken noch das alte Skript; ein
+fehlgeschlagener Load behält den alten Kontext und beendet den Load der
+Engine mit dem Fehler.
 
 ### Die Engine
 
@@ -244,29 +285,11 @@ spät kamen, obwohl ein Tick ein Dreißigstel eines Blocks brauchte. Nach
 einer Änderung platziert sich der Worker beim nächsten Aufwachen neu.
 Unter Windows bindet er sich auf einem Hybridprozessor an die
 Performance-Kerne, erkannt an ihrer Effizienzklasse, und läuft auf
-anderen dort, wo Windows ihn hinsetzt. Auf Apple-Plattformen läuft er in jedem Fall in der Quality-of-Service-Klasse
-user-interactive. Die Statistiken sagen, wo er läuft, welche Priorität
-gilt, für welches `worker_cores` er sich platziert hat und auf welchem
-Kern er seinen letzten Tick rechnete.
-
-### Grenzen
-
-- Der Graph von `aud_audio_graph` nimmt pro Block höchstens 1024
-  gesendete Events an, für alle Knoten zusammen (`max_events_per_block`).
-  Ein Modulator sendet ein Event pro geändertem Wert, im Sprungmodus zwei;
-  ein Skript, das pro Block mehr Werte ändert, als hineinpassen, verliert
-  den Rest; der Graph verwirft und zählt sie.
-- Ein Kontext hält höchstens 1024 Paare (Ausgang, Id); ein Send an ein
-  weiteres wirft einen RangeError.
-- Der Speicher eines QuickJS-ng-Kontexts ist der Zähler seines
-  Allokators: die Bytes des Systemallokators, die er hält, nach ihrer
-  nutzbaren Größe.
-- QuickJS-ng 0.17.0 erholt sich nicht davon, wenn ihm in `JS_NewContext`
-  oder beim Parsen der Speicher ausgeht. Der Knoten setzt das
-  Speicherlimit erst, wenn der Kontext existiert, und kompiliert eine
-  geladene Quelle ohne das Limit, bevor er sie mit dem Limit ausführt;
-  `eval` oder `new Function` in einem Skript, das seinen Speicher
-  aufgebraucht hat, kann den Prozess trotzdem abstürzen lassen.
+anderen dort, wo Windows ihn hinsetzt. Auf Apple-Plattformen läuft er in
+jedem Fall in der Quality-of-Service-Klasse user-interactive. Die
+Statistiken sagen, wo er läuft, welche Priorität gilt, für welches
+`worker_cores` er sich platziert hat und auf welchem Kern er seinen
+letzten Tick rechnete.
 
 ### Die Dart-API
 
@@ -305,6 +328,11 @@ Kern er seinen letzten Tick rechnete.
   markiert: In einem Profile- oder Release-Build behält der Link-Hook die
   Bibliothek nur, wenn die App einen davon nutzt.
 
+## Status
+
+Version 0.2.0 auf ABI 0.4 von `aud_audio_core`. Vor 1.0 - die API kann
+sich zwischen Minor-Versionen ändern.
+
 ## Mitwirken
 
 Gearbeitet wird Ticket für Ticket mit dem `gg`-Workflow; siehe den
@@ -312,3 +340,18 @@ Gearbeitet wird Ticket für Ticket mit dem `gg`-Workflow; siehe den
 [Review Guide](doc/guides/for-ai/ai-review-guide.md). Jeder Commit
 besteht `dart analyze`, `dart format`, `dart test` mit 100 % Abdeckung von
 `lib/`, die nativen Tests und die Prüfung der Lizenzhinweise.
+
+Die nativen Tests brauchen Node.js und `clang++` - unter Windows den
+„C++-Clang-Compiler für Windows“ von Visual Studio; ihr
+RealtimeSanitizer-Build braucht einen clang, der ihn hat, z. B. LLVM aus
+Homebrew auf macOS (`brew install llvm`), und wird ohne ihn übersprungen.
+
+```bash
+dart test                       # Dart tests and native tests
+node scripts/test-native.js     # the native tests alone: ASan+UBSan, RTSan, TSan
+node scripts/check-notices.js   # the third-party notices
+```
+
+## Lizenz
+
+MIT — siehe [LICENSE](LICENSE).

@@ -6,7 +6,7 @@ homepage: https://github.com/audaudio/aud_audio_script
 repository: https://github.com/audaudio/aud_audio_script
 
 environment:
-  sdk: ^3.12.2
+  sdk: ^3.13.0
 
 # The example resolves together with the package, so that upgrading the
 # package upgrades the example too.
@@ -34,10 +34,10 @@ dev_dependencies:
       url: git@github.com:audaudio/aud_audio_graph.git
       tag_pattern: "{{version}}"
     version: ^0.5.5
-  dna_audanika: ^0.0.2
+  dna_audanika: ^0.1.0
   ffigen: ^23.0.0
   flutter_lints: ^6.0.0
-  helix: ^1.13.0
+  helix: ^1.14.0
   # Within the test_api that flutter_test of the example pins.
   test: ^1.31.1
 

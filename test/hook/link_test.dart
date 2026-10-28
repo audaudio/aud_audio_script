@@ -73,9 +73,9 @@ void main() {
       ]) {
         final file = await Isolate.resolvePackageUri(Uri.parse(library));
         final source = await File.fromUri(file!).readAsString();
-        final body = RegExp(
-          'class $className \\{([\\s\\S]*?)\\n\\}',
-        ).firstMatch(source)!.group(1)!;
+        final body = RegExp('class $className \\{([\\s\\S]*?)\\n\\}')
+            .firstMatch(source)!
+            .group(1)!;
         final owner = Class(className, Library(library));
         // The declaration after each @RecordUse() up to its parameters or
         // its body, e.g. `static void registerWith`.
