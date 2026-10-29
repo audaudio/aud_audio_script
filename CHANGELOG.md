@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Use com.example IDs in the example
+
 ## 0.3.0 - 2026-10-28
 
 ### Changed
@@ -25,6 +31,7 @@
 - Upgrade the dependencies published since the first pass
 
 - Lift the lock file to the newest resolvable versions
+
 
 ## 0.2.0 - 2026-10-24
 
