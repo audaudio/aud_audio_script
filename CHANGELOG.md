@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Require Flutter 3.50 and Dart 3.14, build the DNA
+
 ## 0.3.1 - 2026-10-29
 
 ### Added
@@ -35,6 +41,7 @@
 - Upgrade the dependencies published since the first pass
 
 - Lift the lock file to the newest resolvable versions
+
 
 ## 0.2.0 - 2026-10-24
 
