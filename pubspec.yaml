@@ -38,7 +38,7 @@ dev_dependencies:
   ffigen: ^23.0.0
   flutter_lints: ^6.0.0
   # Within the test_api that flutter_test of the example pins.
-  test: ^1.31.1
+  test: ^1.32.0
 
 # The example plays on the engine of aud_audio, which pins exact versions of
 # aud_audio_core and aud_audio_graph; the workspace takes the versions this
