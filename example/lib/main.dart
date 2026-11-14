@@ -8,7 +8,7 @@ import 'dart:async';
 
 import 'package:aud_audio/aud_audio_ffi.dart';
 import 'package:aud_audio_script/aud_audio_script.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() => runApp(const ScriptApp());
 
